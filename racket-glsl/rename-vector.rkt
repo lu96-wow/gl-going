@@ -31,6 +31,10 @@
          bvec2 bvec3 bvec4
          ;; 矩阵构造器（全形式分派）
          mat2 mat3 mat4
+         ;; 拼装：把多个 vec（f32vector）连成一个连续缓冲
+         concat-vecs concat-vecs!
+         ;; vec：n 个同型向量的缓冲（静态/动态顶点数据）
+         vec make-vec vec? vec-count vec-width vec-ref vec-set! vec->f32vector
          ;; 尺寸 / 步长帮助
          glsl-size glsl-byte-size glsl-stride glsl-type-table)
 
@@ -70,6 +74,91 @@
 (define (bvec2 x y) (u32vector (->bool x) (->bool y)))
 (define (bvec3 x y z) (u32vector (->bool x) (->bool y) (->bool z)))
 (define (bvec4 x y z w) (u32vector (->bool x) (->bool y) (->bool z) (->bool w)))
+
+;; ---------- 拼装 ----------
+
+;; 把一串 vec（f32vector）依次写进 dst（原地，从下标 0 开始），返回写入的元素数。
+;; 给"每帧重新生成顶点数据"的动态场景：dst 预分配一次、每帧覆写，零额外分配。
+;;   (define buf (make-f32vector MAX 0.0))            ; init 时分配一次
+;;   (define n (concat-vecs! buf (list (vec2 ...) ...)))  ; 每帧覆写，n = 元素数
+;;   (glBufferSubData GL_ARRAY_BUFFER 0 (* 4 n) buf)   ; 只更新 GPU，不重分配
+(define (concat-vecs! dst vs)
+  (define i 0)
+  (for ([v vs])
+    (for ([j (in-range (f32vector-length v))])
+      (f32vector-set! dst i (f32vector-ref v j))
+      (set! i (add1 i))))
+  i)
+
+;; 把多个 vec（f32vector）连成一个**新**连续缓冲（静态数据：拼一次即可）。
+;; 例：(concat-vecs (vec2 -0.5 -0.5) (vec2 0.5 -0.5) (vec2 0.0 0.5))
+;;     → (f32vector -0.5 -0.5 0.5 -0.5 0.0 0.5)
+;; 只分配输出这一块，不经过 list/apply（无参数个数上限）。
+;; 注：同宽度的向量请优先用 vec（见下）；本函数主要留给"混合宽度"的交错数据。
+(define (concat-vecs . vs)
+  (define total (for/sum ([v vs]) (f32vector-length v)))
+  (define out (make-f32vector total 0.0))
+  (concat-vecs! out vs)
+  out)
+
+;; ---------- vec：n 个同型向量的缓冲 ----------
+
+;; 内部结构：一个 f32vector + 每个 vec 的宽度（分量数）。
+;; 对应 GLSL 的 vec2[N]/vec3[N]（同宽度向量数组），是"动态数量顶点"的 CPU 形状。
+;; （结构名用 gl-vec，把 vec 留给公开构造器；#:transparent 便于打印调试）
+(struct gl-vec (data width) #:transparent)
+
+(define vec? gl-vec?)
+(define vec-width gl-vec-width)
+
+;; 静态构造：(vec (vec2 ...) (vec2 ...) ...) —— 若干同型 vec，宽度取第一个、校验其余。
+;; 个数 = 你列了几个 vec（不用手写 num）。
+(define (vec . vs)
+  (unless (pair? vs)
+    (error 'vec "至少给一个 vec，如 (vec (vec2 0.0 0.0))"))
+  (define w (f32vector-length (car vs)))
+  (for ([v (cdr vs)])
+    (unless (= (f32vector-length v) w)
+      (error 'vec "所有 vec 宽度须一致，实际 ~a 与 ~a" w (f32vector-length v))))
+  (define data (make-f32vector (* w (length vs)) 0.0))
+  (concat-vecs! data vs)
+  (gl-vec data w))
+
+;; 动态构造：(make-vec 1000 (vec3 0.0 0.0 0.0)) —— 预分配 n 个同型 vec（都填 template）。
+;; 之后用 vec-set! 逐帧原地覆写，零分配。
+(define (make-vec n template)
+  (unless (and (exact? n) (integer? n) (>= n 0))
+    (error 'make-vec "n 应为非负整数，实际 ~s" n))
+  (define w (f32vector-length template))
+  (define data (make-f32vector (* n w) 0.0))
+  (for ([i (in-range n)])
+    (for ([j (in-range w)])
+      (f32vector-set! data (+ (* i w) j) (f32vector-ref template j))))
+  (gl-vec data w))
+
+;; 有多少个 vec
+(define (vec-count v) (quotient (f32vector-length (gl-vec-data v)) (gl-vec-width v)))
+
+;; 函数式读：返回第 i 个 vec（一个新 f32vector，宽度个分量）
+(define (vec-ref v i)
+  (define w (gl-vec-width v))
+  (define data (gl-vec-data v))
+  (define out (make-f32vector w 0.0))
+  (for ([j (in-range w)])
+    (f32vector-set! out j (f32vector-ref data (+ (* i w) j))))
+  out)
+
+;; set! 式写：把第 i 个 vec 原地覆写为 w（零分配；w 须同宽）
+(define (vec-set! v i w)
+  (define width (gl-vec-width v))
+  (unless (= (f32vector-length w) width)
+    (error 'vec-set! "宽度不匹配：期望 ~a，实际 ~a" width (f32vector-length w)))
+  (define data (gl-vec-data v))
+  (for ([j (in-range width)])
+    (f32vector-set! data (+ (* i width) j) (f32vector-ref w j))))
+
+;; 上传：底层 f32vector（零拷贝）
+(define (vec->f32vector v) (gl-vec-data v))
 
 ;; ---------- 矩阵（通用分派） ----------
 

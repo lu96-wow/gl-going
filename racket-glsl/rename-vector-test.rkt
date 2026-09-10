@@ -21,6 +21,38 @@
 (check-equal? (lu (bvec3 #t #f #t)) '(1 0 1))
 (check-equal? (lu (bvec2 0 5)) '(0 1))
 
+;; ---------- 拼装 ----------
+(check-equal? (lv (concat-vecs (vec2 -0.5 -0.5) (vec2 0.5 -0.5) (vec2 0.0 0.5)))
+              '(-0.5 -0.5 0.5 -0.5 0.0 0.5))
+(check-equal? (lv (concat-vecs)) '())
+;; 原地拼装：写进预分配 dst，返回元素数
+(define dst (make-f32vector 10 0.0))
+(check-equal? (concat-vecs! dst (list (vec2 1.0 2.0) (vec3 3.0 4.0 5.0))) 5)
+(check-equal? (lv dst) '(1.0 2.0 3.0 4.0 5.0 0.0 0.0 0.0 0.0 0.0))
+
+;; ---------- vec：n 个同型向量 ----------
+;; 静态构造 + 访问
+(define vn (vec (vec2 -0.5 -0.5) (vec2 0.5 -0.5) (vec2 0.0 0.5)))
+(check-true (vec? vn))
+(check-equal? (vec-count vn) 3)
+(check-equal? (vec-width vn) 2)
+(check-equal? (lv (vec->f32vector vn)) '(-0.5 -0.5 0.5 -0.5 0.0 0.5))
+(check-equal? (lv (vec-ref vn 1)) '(0.5 -0.5))        ; 函数式读：新切片
+;; set! 式写（原地，零分配）
+(vec-set! vn 1 (vec2 9.0 9.0))
+(check-equal? (lv (vec->f32vector vn)) '(-0.5 -0.5 9.0 9.0 0.0 0.5))
+;; 动态构造：预分配 n 个，填 template
+(define dn (make-vec 1000 (vec3 0.0 0.0 0.0)))
+(check-equal? (vec-count dn) 1000)
+(check-equal? (vec-width dn) 3)
+(check-equal? (lv (vec-ref dn 999)) '(0.0 0.0 0.0))
+(vec-set! dn 0 (vec3 1.0 2.0 3.0))
+(check-equal? (lv (vec-ref dn 0)) '(1.0 2.0 3.0))
+;; 报错：空 / 宽度不一致 / set! 宽度不匹配
+(check-exn exn:fail? (lambda () (vec)))
+(check-exn exn:fail? (lambda () (vec (vec2 1.0 2.0) (vec3 1.0 2.0 3.0))))
+(check-exn exn:fail? (lambda () (vec-set! vn 0 (vec3 1.0 2.0 3.0))))
+
 ;; ---------- mat：对角 ----------
 (check-equal? (lv (mat2 1.0)) '(1.0 0.0 0.0 1.0))
 (check-equal? (lv (mat4 2.0))
