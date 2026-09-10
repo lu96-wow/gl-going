@@ -36,7 +36,7 @@
          ;; vec：n 个同型向量的缓冲（静态/动态顶点数据）
          vec make-vec vec? vec-count vec-width vec-ref vec-set! vec->f32vector
          ;; 尺寸 / 步长帮助
-         glsl-size glsl-byte-size glsl-stride glsl-type-table)
+         glsl-size glsl-byte-size glsl-stride glsl-stride-bytes glsl-type-table)
 
 ;; ---------- 输入检查 ----------
 
@@ -219,9 +219,12 @@
 
 ;; ---------- 尺寸 / 步长 ----------
 
-;; GLSL 类型名 → 元素数（CPU 有数据表示的类型）
+;; GLSL 类型名 → 元素数（CPU 有数据表示的类型）。
+;; 标量也算 1 个元素（float/int/uint/bool 都是 4 字节），
+;; 这样 glsl-stride-bytes 能算含标量的交错布局（如 pos+color+float）。
 (define glsl-type-table
-  '((vec2 . 2)  (vec3 . 3)  (vec4 . 4)
+  '((float . 1) (int . 1) (uint . 1) (bool . 1)
+    (vec2 . 2)  (vec3 . 3)  (vec4 . 4)
     (ivec2 . 2) (ivec3 . 3) (ivec4 . 4)
     (uvec2 . 2) (uvec3 . 3) (uvec4 . 4)
     (bvec2 . 2) (bvec3 . 3) (bvec4 . 4)
@@ -238,3 +241,11 @@
 ;; 交错属性总元素数（stride 用；字节 = (* 4 (glsl-stride ...))）
 (define (glsl-stride . types)
   (apply + (map glsl-size types)))
+
+;; 交错属性的字节步长：若干类型依次排开后的总字节数。
+;; 用法（glVertexAttribPointer 的 stride/offset）：
+;;   stride = (glsl-stride-bytes 'vec3 'vec3)      ; 位置+法线交错 = 24 字节
+;;   offset = (glsl-stride-bytes 'vec3)            ; 第 2 个属性跳过前面 12 字节
+;; 同一函数既算"步长"也算"前缀偏移"，消除手写字节魔法数字。
+(define (glsl-stride-bytes . types)
+  (* 4 (apply glsl-stride types)))

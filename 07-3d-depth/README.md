@@ -8,7 +8,11 @@
 
 本文件夹的 lib 采用"每课一份复制"；**本课的 lib.rkt 把矩阵升级到 3D**：
 
-- `lib-gui.rkt` —— 从 06 复制（本课未改动；make-window 的默认 gl-config 已带深度缓冲）
+- `lib-gui.rkt` —— 从 06 复制（本课未改动；make-window 已申请 24 位深度缓冲，见下）
+
+★深度缓冲需要两半：**窗口侧申请**（`gl-config%` 的 `set-depth-size`，已由 make-window
+  办好）+ **每帧使用**（`glEnable(GL_DEPTH_TEST)` + 清 `GL_DEPTH_BUFFER_BIT`，本课 02 步学）。
+  没有前一半，深度测试静默失效；没有后一半，深度缓冲只是占着不用。
 - `lib.rkt` —— 从 06 复制，升级：m4-translate / m4-scale 加 z 参数，新增 m4-rot-x / m4-rot-y；
   第 3 步裸写 m4-perspective，第 4 步收进 lib
 

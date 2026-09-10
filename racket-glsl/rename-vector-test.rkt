@@ -88,6 +88,9 @@
 (check-equal? (glsl-size 'vec3) 3)
 (check-equal? (glsl-byte-size 'vec3) 12)
 (check-equal? (glsl-stride 'vec3 'vec2) 5)
+(check-equal? (glsl-stride-bytes 'vec3 'vec2) 20)
+(check-equal? (glsl-stride-bytes 'vec3 'vec3 'float) 28)   ; 实例数组每行 7 float
+(check-equal? (glsl-stride-bytes 'vec3) 12)                 ; 前缀偏移 = 跳过 vec3
 (check-exn exn:fail? (lambda () (glsl-size 'sampler2D)))    ; 无 CPU 表示
 
 (displayln "rename-vector 全部测试通过")

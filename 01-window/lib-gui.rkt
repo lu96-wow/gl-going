@@ -28,6 +28,7 @@
   (define cfg (new gl-config%))
   (send cfg set-legacy? #f)
   (send cfg set-double-buffered #t)
+  (send cfg set-depth-size 24)    ; 申请 24 位深度缓冲（07 课起深度测试要用）
 
   (define frame
     (new (class frame%

@@ -81,7 +81,7 @@
           (glBufferData GL_ARRAY_BUFFER (gl-vector-sizeof verts) verts GL_STATIC_DRAW)
           (define v (u32vector-ref (glGenVertexArrays 1) 0))
           (glBindVertexArray v)
-          (glVertexAttribPointer 0 3 GL_FLOAT #f 12 0)   ; 每顶点 3 float = 12 字节
+          (glVertexAttribPointer 0 (glsl-size 'vec3) GL_FLOAT #f (glsl-stride-bytes 'vec3) 0)   ; 每顶点 3 float = 12 字节
           (glEnableVertexAttribArray 0)
           (define ebo (u32vector-ref (glGenBuffers 1) 0))
           (glBindBuffer GL_ELEMENT_ARRAY_BUFFER ebo)

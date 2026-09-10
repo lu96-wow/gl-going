@@ -10,6 +10,10 @@
 ;;   ① 实心立方体 —— 6 个面 × 4 顶点 = 24 顶点、36 索引，每面一色
 ;;   ② 深度缓冲 —— glEnable(GL_DEPTH_TEST) + 每帧清 GL_DEPTH_BUFFER_BIT
 ;;
+;; ★注意：深度缓冲要"两半"——窗口侧申请 + 使用时开启。窗口侧（gl-config% 的
+;;   set-depth-size 24）已由 make-window 申请好（见 01 课 lib-gui.rkt）；本步学的
+;;   是"使用"那一半：先 glEnable(GL_DEPTH_TEST) 打开比较，再每帧清掉上一帧的 z。
+;;
 ;; ★为什么需要深度缓冲：实心立方体有 6 个面，前面的面必须挡住后面的面。
 ;;   但 GPU 按你提交的顺序画，谁后画谁盖在上面——顺序错了就"后面画到前面"。
 ;;   深度缓冲 = 给每个像素记一个"离相机多近"的 z；画新片元前先比较，
@@ -100,9 +104,9 @@
           (glBufferData GL_ARRAY_BUFFER (gl-vector-sizeof verts) verts GL_STATIC_DRAW)
           (define v (u32vector-ref (glGenVertexArrays 1) 0))
           (glBindVertexArray v)
-          (glVertexAttribPointer 0 3 GL_FLOAT #f 24 0)    ; 位置：3 float，步长 24，起点 0
+          (glVertexAttribPointer 0 (glsl-size 'vec3) GL_FLOAT #f (glsl-stride-bytes 'vec3 'vec3) 0)    ; 位置：3 float，步长 24，起点 0
           (glEnableVertexAttribArray 0)
-          (glVertexAttribPointer 1 3 GL_FLOAT #f 24 12)   ; 颜色：3 float，步长 24，起点 12
+          (glVertexAttribPointer 1 (glsl-size 'vec3) GL_FLOAT #f (glsl-stride-bytes 'vec3 'vec3) (glsl-stride-bytes 'vec3))   ; 颜色：3 float，步长 24，起点 12
           (glEnableVertexAttribArray 1)
           (define ebo (u32vector-ref (glGenBuffers 1) 0))
           (glBindBuffer GL_ELEMENT_ARRAY_BUFFER ebo)

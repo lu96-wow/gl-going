@@ -12,10 +12,13 @@
 ;; ★复习与推广（03 课讲过双属性，这里只是分量数不同）：
 ;;   03 课的第二个属性 aUV 是 vec2（2 个 float）。本步 aColor 是 vec3
 ;;   （3 个 float：红绿蓝）。于是每个顶点 = 位置 2 float + 颜色 3 float
-;;   = 5 个 float，交错存在一块缓冲里。stride/offset 跟着变：
-;;     stride 20 = 5 float × 4 字节 = 20 字节
-;;     offset  0 = 位置（前 2 float）
-;;     offset  8 = 颜色（跳过 2 float = 8 字节）
+;;   = 5 个 float，交错存在一块缓冲里。
+;;
+;; ★从本步起，stride/offset 不再手写字节数，改用 rename-vector 的工具算：
+;;     glsl-size        —— 一个类型的元素数（vec3 → 3，传给 glVertexAttribPointer 的 size）
+;;     glsl-stride-bytes —— 若干类型交错后的字节步长（'vec2 'vec3 → 20）
+;;                         offset 也用它：第二属性 offset = 跳过前面的类型
+;;   （02/03 手写 8/16 是为了理解字节布局；现在收成工具，不易错、易读。）
 ;;
 ;; ★顶点数据怎么拼：一个顶点 = 一个 vec2 + 一个 vec3，宽度不一样，不能用
 ;;   (vec ...)（它要求同宽）。改用 concat-vecs：把一串 f32vector 依次连成
@@ -67,9 +70,9 @@
           (glBufferData GL_ARRAY_BUFFER (gl-vector-sizeof verts) verts GL_STATIC_DRAW)
           (define v (u32vector-ref (glGenVertexArrays 1) 0))
           (glBindVertexArray v)
-          (glVertexAttribPointer 0 2 GL_FLOAT #f 20 0)   ; 位置：2 float，步长 20，起点 0
+          (glVertexAttribPointer 0 (glsl-size 'vec2) GL_FLOAT #f (glsl-stride-bytes 'vec2 'vec3) 0)   ; 位置：2 float，步长 20，起点 0
           (glEnableVertexAttribArray 0)
-          (glVertexAttribPointer 1 3 GL_FLOAT #f 20 8)   ; 颜色：3 float，步长 20，起点 8
+          (glVertexAttribPointer 1 (glsl-size 'vec3) GL_FLOAT #f (glsl-stride-bytes 'vec2 'vec3) (glsl-stride-bytes 'vec2))   ; 颜色：3 float，步长 20，起点 8
           (glEnableVertexAttribArray 1)
           (glBindVertexArray 0)
           v)))

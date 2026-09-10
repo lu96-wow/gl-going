@@ -56,8 +56,10 @@
              0.0 0.0 1.0 0.0    ; 第 2 列
              tx  ty  0.0 1.0))  ; 第 3 列 = (tx, ty, 0, 1)
 
-;; 单位方块（EBO）：中心在原点、边长 1，范围 [-0.5, 0.5]
-(define verts (f32vector -0.5 -0.5   0.5 -0.5   0.5 0.5   -0.5 0.5))
+;; 单位方块（EBO）：中心在原点、边长 1，范围 [-0.5, 0.5]。
+;; 位置-only 的简单缓冲也用 vec（若干个 vec2）写，和 02 课一致；
+;; 上传时用 vec->f32vector 取底层 f32vector。
+(define verts (vec (vec2 -0.5 -0.5) (vec2 0.5 -0.5) (vec2 0.5 0.5) (vec2 -0.5 0.5)))
 (define idx   (u16vector 0 1 2  0 2 3))
 
 (define (draw)
@@ -84,10 +86,10 @@
         (lambda ()
           (define vbo (u32vector-ref (glGenBuffers 1) 0))
           (glBindBuffer GL_ARRAY_BUFFER vbo)
-          (glBufferData GL_ARRAY_BUFFER (gl-vector-sizeof verts) verts GL_STATIC_DRAW)
+          (glBufferData GL_ARRAY_BUFFER (gl-vector-sizeof (vec->f32vector verts)) (vec->f32vector verts) GL_STATIC_DRAW)
           (define v (u32vector-ref (glGenVertexArrays 1) 0))
           (glBindVertexArray v)
-          (glVertexAttribPointer 0 2 GL_FLOAT #f 8 0)
+          (glVertexAttribPointer 0 (glsl-size 'vec2) GL_FLOAT #f (glsl-stride-bytes 'vec2) 0)
           (glEnableVertexAttribArray 0)
           (define ebo (u32vector-ref (glGenBuffers 1) 0))
           (glBindBuffer GL_ELEMENT_ARRAY_BUFFER ebo)

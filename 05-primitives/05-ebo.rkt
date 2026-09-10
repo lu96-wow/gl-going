@@ -74,9 +74,9 @@
           (glBufferData GL_ARRAY_BUFFER (gl-vector-sizeof verts) verts GL_STATIC_DRAW)
           (define v (u32vector-ref (glGenVertexArrays 1) 0))
           (glBindVertexArray v)
-          (glVertexAttribPointer 0 2 GL_FLOAT #f 20 0)
+          (glVertexAttribPointer 0 (glsl-size 'vec2) GL_FLOAT #f (glsl-stride-bytes 'vec2 'vec3) 0)
           (glEnableVertexAttribArray 0)
-          (glVertexAttribPointer 1 3 GL_FLOAT #f 20 8)
+          (glVertexAttribPointer 1 (glsl-size 'vec3) GL_FLOAT #f (glsl-stride-bytes 'vec2 'vec3) (glsl-stride-bytes 'vec2))
           (glEnableVertexAttribArray 1)
           ;; ★索引缓冲要在 VAO 还绑着的时候绑——VAO 会把它一起记住
           (define ebo (u32vector-ref (glGenBuffers 1) 0))
