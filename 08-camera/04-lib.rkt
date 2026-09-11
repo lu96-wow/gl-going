@@ -4,8 +4,8 @@
 ;; 运行：racket 08-camera/04-lib.rkt
 ;; 操作：左键拖 = 环绕   滚轮 = 拉近拉远   R = 复位   ESC/点X = 退出
 ;; =========================================================
-;; 前 3 步：m4-look-at（20 行）和网格地面（8 行）每个文件都要重新裸写一遍——
-;; 纯重复。本步把它们收进 lib.rkt（见同文件夹 lib.rkt）：m4-look-at + grid-verts。
+;; 前 3 步：mat4-look-at（20 行）和网格地面（8 行）每个文件都要重新裸写一遍——
+;; 纯重复。本步把它们收进 lib.rkt（见同文件夹 lib.rkt）：mat4-look-at + grid-verts。
 ;; 之后写相机相关代码只调这两个函数。
 ;;
 ;; ★节奏：裸写(01/02/03) → 收进 lib(本步) → 复用(下一步)。
@@ -15,7 +15,7 @@
 ;; =========================================================
 
 (require "lib-gui.rkt")
-(require "lib.rkt")     ; m4-look-at、grid-verts 现在都在这里
+(require "lib.rkt")     ; mat4-look-at、grid-verts 现在都在这里
 
 (define PI (acos -1.0))
 (define start-ms (current-inexact-milliseconds))
@@ -78,26 +78,26 @@
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (define-values (w h) (send canvas get-gl-client-size))
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))
   (define ph (* (/ PI 180.0) (unbox pitch)))
   (define ya (* (/ PI 180.0) (unbox yaw)))
   (define ex (* (unbox dist) (cos ph) (sin ya)))
   (define ey (* (unbox dist) (sin ph)))
   (define ez (* (unbox dist) (cos ph) (cos ya)))
-  (define V (m4-look-at ex ey ez  0.0 0.0 0.0  0.0 1.0 0.0))
+  (define V (mat4-look-at ex ey ez  0.0 0.0 0.0  0.0 1.0 0.0))
 
   (glClearColor 0.07 0.08 0.14 1.0)
   (glClear (bitwise-ior GL_COLOR_BUFFER_BIT GL_DEPTH_BUFFER_BIT))
   (glUseProgram prog)
 
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult P V)))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult P V))
   (glBindVertexArray vao-grid)
   (glDrawArrays GL_LINES 0 grid-count)
 
-  (define M (m4-mult (m4-translate 0.0 1.0 0.0)
-                     (m4-mult (m4-mult (m4-rot-y (* t 60.0)) (m4-rot-x (* t 40.0)))
-                              (m4-scale 0.8 0.8 0.8))))
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) M)))
+  (define M (mat4-mult (mat4-translate 0.0 1.0 0.0)
+                     (mat4-mult (mat4-mult (mat4-rot-y (* t 60.0)) (mat4-rot-x (* t 40.0)))
+                              (mat4-scale 0.8 0.8 0.8))))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) M))
   (glBindVertexArray vao-cube)
   (glDrawElements GL_TRIANGLES 36 GL_UNSIGNED_SHORT 0))
 

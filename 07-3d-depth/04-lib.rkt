@@ -3,19 +3,19 @@
 ;; 07-3d-depth/04-lib.rkt —— 第四步：收进 lib.rkt
 ;; 运行：racket 07-3d-depth/04-lib.rkt    点 X = 退出
 ;; =========================================================
-;; 03 步裸写的 m4-perspective、02 步裸写的立方体数据，后面每课都要用——纯重复。
-;; 本步把它们收进 lib.rkt（见同文件夹 lib.rkt）：m4-perspective + cube-verts +
+;; 03 步裸写的 mat4-perspective、02 步裸写的立方体数据，后面每课都要用——纯重复。
+;; 本步把它们收进 lib.rkt（见同文件夹 lib.rkt）：mat4-perspective + cube-verts +
 ;; cube-idx。之后画立方体只需两行数据、一个矩阵函数。
 ;;
 ;; ★节奏：裸写(02/03) → 收进 lib(本步) → 复用(下一步)。
 ;;   矩阵工具至此齐了：translate/rot-x/rot-y/rot-z/scale/mult/ortho/perspective。
 ;;
 ;; 本步演示和 03 步完全一样（翻滚的透视立方体），代码从"自己写透视矩阵 +
-;; 30 行立方体数据"缩成"两行 lib 数据 + 一个 m4-perspective 调用"。
+;; 30 行立方体数据"缩成"两行 lib 数据 + 一个 mat4-perspective 调用"。
 ;; =========================================================
 
 (require "lib-gui.rkt")
-(require "lib.rkt")     ; m4-perspective、cube-verts、cube-idx 现在都在这里
+(require "lib.rkt")     ; mat4-perspective、cube-verts、cube-idx 现在都在这里
 
 (define start-ms (current-inexact-milliseconds))
 
@@ -40,13 +40,13 @@
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (define-values (w h) (send canvas get-gl-client-size))
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define V (m4-translate 0.0 0.0 -6.0))
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))
-  (define M (m4-mult (m4-rot-y (* t 40.0)) (m4-rot-x (* t 30.0))))
+  (define V (mat4-translate 0.0 0.0 -6.0))
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))
+  (define M (mat4-mult (mat4-rot-y (* t 40.0)) (mat4-rot-x (* t 30.0))))
   (glClearColor 0.07 0.08 0.14 1.0)
   (glClear (bitwise-ior GL_COLOR_BUFFER_BIT GL_DEPTH_BUFFER_BIT))
   (glUseProgram prog)
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) M)))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) M))
   (glBindVertexArray vao)
   (glDrawElements GL_TRIANGLES 36 GL_UNSIGNED_SHORT 0))
 

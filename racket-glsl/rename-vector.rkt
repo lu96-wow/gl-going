@@ -7,12 +7,20 @@
 ;;       顺带消掉 glVertexAttribPointer 的 stride/offset 魔法数字。
 ;;
 ;; 边界：
-;;   - 只做"数据命名桥"，不重实现 GLSL 数学。矩阵计算仍在 lib.rkt 的 m4-*（f64vector）。
-;;   - 只覆盖"CPU 有数据表示"的类型：vec/ivec/uvec/bvec/mat。
+;;   - 只做"类型别名 + 数据命名桥"：把 GLSL 类型名映射到 ffi/vector 类型；
+;;     数学运算不在这里（由教程 lib.rkt 提供，且直接作用于这些别名类型）。
+;;   - 覆盖"CPU 有数据表示"的全部 GLSL 向量/矩阵类型：vec/dvec/ivec/uvec/bvec/mat/dmat。
 ;;     sampler*/image*/atomic_uint 没有 CPU 向量，不在本模块。
-;;   - 标量（float/int/uint/bool）直接就是 Racket 数，不重定义，避免遮蔽 Racket 内置。
-;;   - 列主序约定：GLSL mat 与 lib.rkt 的 f64vector[16] 都是列主序，直接转、不转置。
+;;   - 标量（float/int/uint/bool/double）直接就是 Racket 数，不重定义，避免遮蔽 Racket 内置。
+;;   - struct：define-glsl-struct 把 GLSL 的 struct（具名字段）镜像到 CPU 侧，
+;;     一并生成铺平 / stride / offset / size（供 VBO + glVertexAttribPointer 用）。
+;;   - 精度是 GLSL 命名轴上的选择：vec→f32vector，dvec→f64vector。别名透明，
+;;     结果是货真价实的 ffi/vector，随时可用 ffi/vector 的 API（本模块已 all-from-out 转发）。
+;;   - 列主序约定：GLSL mat/dmat 与 ffi/vector 的列主序展开一致，直接转、不转置。
 ;;   - GLSL bool 在内存是 32 位：bvec 映射到 u32vector（0/1）。
+;;   - 注意：concat-vecs / pack / glsl-size / stride-bytes / field-offsets 属于
+;;     "GL 数据上传助手"（glVertexAttribPointer 的布局数学），不是 GLSL 语法；
+;;     放在本模块只为"数据桥"一站配齐，概念上要与上面的 GLSL 类型区分开。
 ;;
 ;; 显式输入检查（不隐式转换）：
 ;;   - float 构造器要求 flonum（如 1.0）；整数/有理数直接报错，由调用方写 1.0。
@@ -22,19 +30,25 @@
 ;; ============================================================
 
 (require ffi/vector)
+(require (for-syntax racket/base
+                     racket/syntax))
 
 (provide (all-from-out ffi/vector)
          ;; 向量构造器（元数由 Racket 自身 arity 保证）
          vec2 vec3 vec4
+         dvec2 dvec3 dvec4
          ivec2 ivec3 ivec4
          uvec2 uvec3 uvec4
          bvec2 bvec3 bvec4
          ;; 矩阵构造器（全形式分派）
          mat2 mat3 mat4
+         dmat2 dmat3 dmat4
          ;; 拼装：把多个 vec（f32vector）连成一个连续缓冲
          concat-vecs concat-vecs!
          ;; vec：n 个同型向量的缓冲（静态/动态顶点数据）
          vec make-vec vec? vec-count vec-width vec-ref vec-set! vec->f32vector
+         ;; GLSL struct：具名字段，与 shader 的 (struct ...) 对齐
+         define-glsl-struct
          ;; 尺寸 / 步长帮助
          glsl-size glsl-byte-size glsl-stride glsl-stride-bytes glsl-type-table)
 
@@ -74,6 +88,11 @@
 (define (bvec2 x y) (u32vector (->bool x) (->bool y)))
 (define (bvec3 x y z) (u32vector (->bool x) (->bool y) (->bool z)))
 (define (bvec4 x y z w) (u32vector (->bool x) (->bool y) (->bool z) (->bool w)))
+
+;; double 精度向量：dvec → f64vector（分量不收窄，保留 f64）
+(define (dvec2 x y) (f64vector (check-float 'dvec2 x) (check-float 'dvec2 y)))
+(define (dvec3 x y z) (f64vector (check-float 'dvec3 x) (check-float 'dvec3 y) (check-float 'dvec3 z)))
+(define (dvec4 x y z w) (f64vector (check-float 'dvec4 x) (check-float 'dvec4 y) (check-float 'dvec4 z) (check-float 'dvec4 w)))
 
 ;; ---------- 拼装 ----------
 
@@ -185,60 +204,69 @@
   (for*/list ([c (in-range n)] [r (in-range n)])
     (if (= r c) f 0.0)))
 
-;; 通用矩阵构造：who=mat2/mat3/mat4，n=2/3/4，args=构造参数
+;; 通用矩阵构造：name="mat2"/"dmat2"…，n=2/3/4，build=list→f32/f64vector，args=构造参数
 ;;   (mat 1 标量)         → 对角
-;;   (mat f32/f64[n*n])   → 拷贝 / f64→f32
+;;   (mat f32/f64[n*n])   → 拷贝（mat 收 f64 转 f32；dmat 收 f32 转 f64）
 ;;   (mat n 个列向量)      → 拼列
 ;;   (mat n*n 个标量)      → 列主序
 ;;   零元或其它 → 报错（对齐 GLSL）
-(define (make-mat who n args)
+(define (make-mat name n build args)
   (define total (* n n))
   (cond
     [(null? args)
-     (error who "mat~a() 在 GLSL 中是未初始化，不支持零参数构造" n)]
+     (error name "~a() 在 GLSL 中是未初始化，不支持零参数构造" name)]
     [(= (length args) 1)
      (define x (car args))
      (cond
-       [(number? x) (apply f32vector (diag-list who n x))]
+       [(number? x) (build (diag-list name n x))]
        [(and (f32vector? x) (= (f32vector-length x) total))
-        (apply f32vector (f32vector->list x))]
+        (build (f32vector->list x))]
        [(and (f64vector? x) (= (f64vector-length x) total))
-        (apply f32vector (f64vector->list x))]
-       [else (error who "mat~a 单参数应为标量或长度 ~a 的 f32/f64 向量，实际 ~s" n total x)])]
+        (build (f64vector->list x))]
+       [else (error name "~a 单参数应为标量或长度 ~a 的 f32/f64 向量，实际 ~s" name total x)])]
     [(= (length args) n)
-     (apply f32vector (apply append (map (lambda (c) (col->list who c n)) args)))]
+     (build (apply append (map (lambda (c) (col->list name c n)) args)))]
     [(= (length args) total)
-     (apply f32vector (map (lambda (x) (check-float who x)) args))]
+     (build (map (lambda (x) (check-float name x)) args))]
     [else
-     (error who "mat~a 参数个数应为 1（对角/拷贝）、~a（列向量）或 ~a（标量），实际 ~a"
-            n n total (length args))]))
+     (error name "~a 参数个数应为 1（对角/拷贝）、~a（列向量）或 ~a（标量），实际 ~a"
+            name n total (length args))]))
 
-(define (mat2 . args) (make-mat 'mat2 2 args))
-(define (mat3 . args) (make-mat 'mat3 3 args))
-(define (mat4 . args) (make-mat 'mat4 4 args))
+;; matN → f32vector；dmatN → f64vector（同一个 GLSL 名字，两种精度存储）
+(define (mat2 . args) (make-mat "mat2" 2 (lambda (xs) (apply f32vector xs)) args))
+(define (mat3 . args) (make-mat "mat3" 3 (lambda (xs) (apply f32vector xs)) args))
+(define (mat4 . args) (make-mat "mat4" 4 (lambda (xs) (apply f32vector xs)) args))
+(define (dmat2 . args) (make-mat "dmat2" 2 (lambda (xs) (apply f64vector xs)) args))
+(define (dmat3 . args) (make-mat "dmat3" 3 (lambda (xs) (apply f64vector xs)) args))
+(define (dmat4 . args) (make-mat "dmat4" 4 (lambda (xs) (apply f64vector xs)) args))
 
 ;; ---------- 尺寸 / 步长 ----------
 
 ;; GLSL 类型名 → 元素数（CPU 有数据表示的类型）。
-;; 标量也算 1 个元素（float/int/uint/bool 都是 4 字节），
-;; 这样 glsl-stride-bytes 能算含标量的交错布局（如 pos+color+float）。
+;; 标量也算 1 个元素；这样 glsl-size 能算含标量的交错布局（如 pos+color+float）。
 (define glsl-type-table
-  '((float . 1) (int . 1) (uint . 1) (bool . 1)
+  '((float . 1) (int . 1) (uint . 1) (bool . 1) (double . 1)
     (vec2 . 2)  (vec3 . 3)  (vec4 . 4)
+    (dvec2 . 2) (dvec3 . 3) (dvec4 . 4)
     (ivec2 . 2) (ivec3 . 3) (ivec4 . 4)
     (uvec2 . 2) (uvec3 . 3) (uvec4 . 4)
     (bvec2 . 2) (bvec3 . 3) (bvec4 . 4)
-    (mat2 . 4)  (mat3 . 9)  (mat4 . 16)))
+    (mat2 . 4)  (mat3 . 9)  (mat4 . 16)
+    (dmat2 . 4) (dmat3 . 9) (dmat4 . 16)))
 
 (define (glsl-size t)
   (define e (assq t glsl-type-table))
   (unless e (error 'glsl-size "未知 GLSL 类型（或无可表示的 CPU 类型）：~s" t))
   (cdr e))
 
-;; 元素数 × 4（float/int/uint/bool 都是 4 字节）
-(define (glsl-byte-size t) (* 4 (glsl-size t)))
+;; 每个分量占几字节：float/int/uint/bool 系 = 4；double 系 = 8
+(define (glsl-component-bytes t)
+  (if (memq t '(double dvec2 dvec3 dvec4 dmat2 dmat3 dmat4)) 8 4))
 
-;; 交错属性总元素数（stride 用；字节 = (* 4 (glsl-stride ...))）
+;; 元素数 × 分量字节数
+(define (glsl-byte-size t) (* (glsl-size t) (glsl-component-bytes t)))
+
+;; 交错属性总元素数（stride 用）
 (define (glsl-stride . types)
   (apply + (map glsl-size types)))
 
@@ -248,4 +276,76 @@
 ;;   offset = (glsl-stride-bytes 'vec3)            ; 第 2 个属性跳过前面 12 字节
 ;; 同一函数既算"步长"也算"前缀偏移"，消除手写字节魔法数字。
 (define (glsl-stride-bytes . types)
-  (* 4 (apply glsl-stride types)))
+  (apply + (map glsl-byte-size types)))
+
+;; 低层原语：按类型清单把字段值铺成一条交错的 f32 记录（标量字段直接给数）。
+;; 一般不要直接用——用 define-glsl-struct（具名字段）表达交错记录，它内部调 pack。
+;; 注：pack 面向 float 顶点数据（标量字段 = float，给 flonum；向量字段给 vec/mat）。
+(define (pack types . fields)
+  (unless (= (length types) (length fields))
+    (error 'pack "字段数与类型清单不一致：~a 个字段 vs ~a 个类型" (length fields) (length types)))
+  (apply concat-vecs
+         (for/list ([t (in-list types)] [f (in-list fields)])
+           (define n (glsl-size t))
+           (cond
+             [(= n 1) (f32vector (check-float 'pack f))]   ; 标量字段（float）
+             [(f32vector? f)
+              (unless (= (f32vector-length f) n)
+                (error 'pack "字段 ~s 应为长度 ~a 的向量，实际 ~a" t n (f32vector-length f)))
+              f]
+             [else (error 'pack "字段 ~s 应为标量（flonum）或 f32 向量，实际 ~s" t f)]))))
+
+;; 低层原语：交错布局里每个字段的字节偏移（define-glsl-struct 内部用）：
+;;   (glsl-field-offsets '(vec3 vec3 float)) → '(0 12 24)
+(define (glsl-field-offsets types)
+  (let loop ([ts types] [off 0] [acc '()])
+    (if (null? ts)
+        (reverse acc)
+        (loop (cdr ts) (+ off (glsl-byte-size (car ts))) (cons off acc)))))
+
+;; ============================================================
+;; GLSL struct：把 shader 里的 struct 镜像到 CPU 侧。
+;;   (define-glsl-struct Instance (offset vec3) (color vec3) (phase float))
+;; 生成：
+;;   - Racket struct：Instance（构造器，与 GLSL 的 struct 构造器同名）/ Instance? / Instance-offset / ...
+;;   - (Instance->f32vector rec)  铺平成交错 f32vector（喂 VBO）
+;;   - (Instance-stride)          总字节步长
+;;   - (Instance-field-offset 'x) 字段字节偏移（给 glVertexAttribPointer）
+;;   - (Instance-field-size   'x) 字段分量数（给 glVertexAttribPointer 的 size）
+;; 字段名/类型与 shader 的 (glsl (struct Instance ...)) 一一对应。
+;; ============================================================
+(define-syntax (define-glsl-struct stx)
+  (syntax-case stx ()
+    [(_ Name (field type) ...)
+     (let* ([fields (syntax->list #'(field ...))]
+            [types  (syntax->list #'(type ...))])
+       (when (null? fields)
+         (error 'define-glsl-struct "至少需要一个字段"))
+       (with-syntax
+         ([types-name   (format-id #'Name "~a-types" #'Name)]
+          [types-list   (datum->syntax #'Name (map syntax->datum types))]
+          [to-f32       (format-id #'Name "~a->f32vector" #'Name)]
+          [stride-fn    (format-id #'Name "~a-stride" #'Name)]
+          [field-index  (format-id #'Name "~a-field-index" #'Name)]
+          [field-offset (format-id #'Name "~a-field-offset" #'Name)]
+          [field-size   (format-id #'Name "~a-field-size" #'Name)]
+          [(field-acc ...)
+           (map (lambda (f) (format-id #'Name "~a-~a" #'Name f)) fields)]
+          [(field-clause ...)
+           (for/list ([f fields] [i (in-naturals)])
+             #`[(#,f) #,i])])
+         #'(begin
+             (struct Name (field ...) #:transparent)
+             (define types-name 'types-list)
+             (define (to-f32 rec)
+               (pack types-name (field-acc rec) ...))
+             (define (stride-fn)
+               (apply glsl-stride-bytes types-name))
+             (define (field-index f)
+               (case f
+                 field-clause ...
+                 [else (error 'field-index "未知字段：~s" f)]))
+             (define (field-offset f)
+               (list-ref (glsl-field-offsets types-name) (field-index f)))
+             (define (field-size f)
+               (glsl-size (list-ref types-name (field-index f)))))))]))

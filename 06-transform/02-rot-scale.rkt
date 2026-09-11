@@ -26,7 +26,7 @@
 ;;   乘上 (x,y,0,1) 得到 (sx·x, sy·y, 0, 1) = 沿各轴拉伸。
 ;;
 ;; 本步视觉：方块绕自己中心匀速旋转。★动手试：把下面 draw 里的
-;;   (m4-rot-z ...) 换成 (m4-scale 1.3 1.3)，方块就会原地"呼吸"缩放。
+;;   (mat4-rot-z ...) 换成 (mat4-scale 1.3 1.3)，方块就会原地"呼吸"缩放。
 ;;   两个变换同时做（旋转+缩放）需要矩阵乘法——下一步。
 ;; =========================================================
 
@@ -51,18 +51,18 @@
           (set! FragColor (vec4 uColor 1.0)))))
 
 ;; 旋转矩阵（绕 z，角度制）—— 裸写，本步主角
-(define (m4-rot-z deg)
+(define (mat4-rot-z deg)
   (define r (* (/ PI 180.0) deg))
   (define c (cos r))
   (define s (sin r))
-  (f64vector c     s     0.0 0.0    ; 第 0 列 = (cosθ, sinθ)
+  (mat4 c     s     0.0 0.0    ; 第 0 列 = (cosθ, sinθ)
              (- s) c     0.0 0.0    ; 第 1 列 = (-sinθ, cosθ)
              0.0   0.0   1.0 0.0
              0.0   0.0   0.0 1.0))
 
 ;; 缩放矩阵 —— 对角线放倍数（本步先定义，动手试时换上去）
-(define (m4-scale sx sy)
-  (f64vector sx  0.0 0.0 0.0
+(define (mat4-scale sx sy)
+  (mat4 sx  0.0 0.0 0.0
              0.0 sy  0.0 0.0
              0.0 0.0 1.0 0.0
              0.0 0.0 0.0 1.0))
@@ -72,11 +72,11 @@
 
 (define (draw)
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
-  (define M (m4-rot-z (* t 90.0)))    ; 每秒转 90°
+  (define M (mat4-rot-z (* t 90.0)))    ; 每秒转 90°
   (glClearColor 0.07 0.08 0.14 1.0)
   (glClear GL_COLOR_BUFFER_BIT)
   (glUseProgram prog)
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 M))
+  (glUniformMatrix4fv loc-mvp 1 #f M)
   (glUniform3f loc-color 0.30 0.65 0.95)
   (glBindVertexArray vao)
   (glDrawElements GL_TRIANGLES 6 GL_UNSIGNED_SHORT 0))

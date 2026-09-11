@@ -7,7 +7,7 @@
 ;; 投影（平行光线）。真实世界是**近大远小**，本步换透视投影。
 ;;
 ;; 本步新增（2 个，同属"透视"这一件事）：
-;;   ① m4-perspective —— 透视投影矩阵
+;;   ① mat4-perspective —— 透视投影矩阵
 ;;   ② 透视除法 —— GPU 自动做 xyz÷w，让远的变小
 ;;
 ;; ★透视矩阵的关键（本步主角，裸写）：它让 w 分量 = -z（离相机越远 w 越大）。
@@ -15,7 +15,7 @@
 ;;   远处顶点 w 大 → 除完后坐标被挤向中心 → 视觉上更小。这就是近大远小的
 ;;   数学来源。near/far 之外的顶点会被裁剪掉。
 ;;
-;;   m4-perspective(fovy, aspect, near, far)：
+;;   mat4-perspective(fovy, aspect, near, far)：
 ;;     fovy   = 垂直视角（度），45° 是常见默认
 ;;     aspect = 宽/高（窗口比例）
 ;;     near/far = 近/远裁剪面。★别设 0.0001/1e9：z 以非线性方式存进深度缓冲，
@@ -49,11 +49,11 @@
           (set! FragColor (vec4 vColor 1.0)))))
 
 ;; 透视投影矩阵（裸写，本步主角）
-(define (m4-perspective fovy aspect near far)
+(define (mat4-perspective fovy aspect near far)
   (define f (/ 1.0 (tan (* 0.5 (/ PI 180.0) fovy))))
   (define nf (/ (+ near far) (- near far)))
   (define n2f (/ (* 2.0 near far) (- near far)))
-  (f64vector (/ f aspect) 0.0 0.0 0.0
+  (mat4 (/ f aspect) 0.0 0.0 0.0
              0.0 f 0.0 0.0
              0.0 0.0 nf -1.0
              0.0 0.0 n2f 0.0))
@@ -83,13 +83,13 @@
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (define-values (w h) (send canvas get-gl-client-size))
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define V (m4-translate 0.0 0.0 -6.0))
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))   ; ★透视投影
-  (define M (m4-mult (m4-rot-y (* t 40.0)) (m4-rot-x (* t 30.0))))
+  (define V (mat4-translate 0.0 0.0 -6.0))
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))   ; ★透视投影
+  (define M (mat4-mult (mat4-rot-y (* t 40.0)) (mat4-rot-x (* t 30.0))))
   (glClearColor 0.07 0.08 0.14 1.0)
   (glClear (bitwise-ior GL_COLOR_BUFFER_BIT GL_DEPTH_BUFFER_BIT))
   (glUseProgram prog)
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) M)))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) M))
   (glBindVertexArray vao)
   (glDrawElements GL_TRIANGLES 36 GL_UNSIGNED_SHORT 0))
 

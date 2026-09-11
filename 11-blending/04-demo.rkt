@@ -45,8 +45,8 @@
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (define-values (w h) (send canvas get-gl-client-size))
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))
-  (define V (m4-look-at 0.0 2.6 7.5  0.0 0.6 0.0  0.0 1.0 0.0))
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))
+  (define V (mat4-look-at 0.0 2.6 7.5  0.0 0.6 0.0  0.0 1.0 0.0))
 
   (if (unbox blend-on?)
       (begin (glEnable GL_BLEND)
@@ -60,21 +60,21 @@
   (define (cube m tint a)
     (glUniform3f loc-tint (list-ref tint 0) (list-ref tint 1) (list-ref tint 2))
     (glUniform1f loc-alpha a)
-    (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) m)))
+    (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) m))
     (glDrawElements GL_TRIANGLES 36 GL_UNSIGNED_SHORT 0))
 
   ;; ---- 第一遍：不透明物体（写深度）----
   (glDepthMask #t)
-  (cube (m4-mult (m4-translate -1.9 0.5 0.0) (m4-mult (m4-rot-y (* t 40.0)) (m4-scale 0.5 0.5 0.5)))
+  (cube (mat4-mult (mat4-translate -1.9 0.5 0.0) (mat4-mult (mat4-rot-y (* t 40.0)) (mat4-scale 0.5 0.5 0.5)))
         '(0.85 0.30 0.30) 1.0)
-  (cube (m4-mult (m4-translate  1.9 0.5 0.0) (m4-mult (m4-rot-y (* t 40.0)) (m4-scale 0.5 0.5 0.5)))
+  (cube (mat4-mult (mat4-translate  1.9 0.5 0.0) (mat4-mult (mat4-rot-y (* t 40.0)) (mat4-scale 0.5 0.5 0.5)))
         '(0.30 0.60 0.95) 1.0)
-  (cube (m4-mult (m4-translate 0.0 0.6 0.0) (m4-mult (m4-rot-y (* t -30.0)) (m4-scale 0.5 0.5 0.5)))
+  (cube (mat4-mult (mat4-translate 0.0 0.6 0.0) (mat4-mult (mat4-rot-y (* t -30.0)) (mat4-scale 0.5 0.5 0.5)))
         '(0.70 0.72 0.80) 1.0)
 
   ;; ---- 第二遍：半透明玻璃板（关深度写入）----
   (glDepthMask #f)
-  (cube (m4-mult (m4-translate 0.0 0.9 1.2) (m4-scale 1.1 1.1 0.02))
+  (cube (mat4-mult (mat4-translate 0.0 0.9 1.2) (mat4-scale 1.1 1.1 0.02))
         '(0.30 0.90 0.60) 0.35)
   (glDepthMask #t))
 

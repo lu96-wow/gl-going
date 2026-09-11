@@ -110,8 +110,8 @@
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (define-values (w h) (send canvas get-gl-client-size))
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))
-  (define V (m4-translate 0.0 0.0 (- (unbox dist))))
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))
+  (define V (mat4-translate 0.0 0.0 (- (unbox dist))))
   (define ang (* t 25.0))    ; 缓慢转 → 台阶稳定可见
 
   (glClearColor 0.02 0.02 0.05 1.0)   ; 近黑背景 → 高对比
@@ -119,15 +119,15 @@
   (glUseProgram prog)
   ;; 两片 blade，绕 z 转（在屏幕平面内转），互相垂直
   (glBindVertexArray vao-blade1)
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) (m4-rot-z ang))))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) (mat4-rot-z ang)))
   (glDrawArrays GL_TRIANGLES 0 3)
   (glBindVertexArray vao-blade2)
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) (m4-rot-z (+ ang 90.0)))))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) (mat4-rot-z (+ ang 90.0))))
   (glDrawArrays GL_TRIANGLES 0 3)
   ;; 1px 细斜线（静止，浅角度 → 最明显的台阶）
   (glBindVertexArray vao-line)
   (glLineWidth 1.0)
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult P V)))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult P V))
   (glDrawArrays GL_LINES 0 2))
 
 (define (draw)

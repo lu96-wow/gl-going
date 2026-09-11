@@ -48,25 +48,24 @@
   (u16vector 0 1 2  0 2 3  5 4 7  5 7 6  1 5 6  1 6 2
              4 0 3  4 3 7  3 2 6  3 6 7  4 5 1  4 1 0))
 
-;; 实例数组：每实例 3 个 float = 位置偏移(x, 0, z)，10×10 网格
+;; 实例数组：每实例 1 个 vec3 = 位置偏移(x, 0, z)，10×10 网格
 (define inst
-  (apply f32vector
-         (apply append
-                (for/list ([i (in-range N)])
-                  (define ix (exact->inexact (quotient i 10)))
-                  (define iz (exact->inexact (remainder i 10)))
-                  (list (- (* ix 1.1) 4.95) 0.0 (- (* iz 1.1) 4.95))))))
+  (apply concat-vecs
+         (for/list ([i (in-range N)])
+           (define ix (exact->inexact (quotient i 10)))
+           (define iz (exact->inexact (remainder i 10)))
+           (vec3 (- (* ix 1.1) 4.95) 0.0 (- (* iz 1.1) 4.95)))))
 
 (define (draw)
   (define-values (w h) (send canvas get-gl-client-size))
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))
-  (define V (m4-look-at 0.0 8.0 13.0  0.0 0.0 0.0  0.0 1.0 0.0))
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))
+  (define V (mat4-look-at 0.0 8.0 13.0  0.0 0.0 0.0  0.0 1.0 0.0))
 
   (glClearColor 0.05 0.06 0.10 1.0)
   (glClear (bitwise-ior GL_COLOR_BUFFER_BIT GL_DEPTH_BUFFER_BIT))
   (glUseProgram prog)
-  (glUniformMatrix4fv loc-vp 1 #f (mat4 (m4-mult P V)))
+  (glUniformMatrix4fv loc-vp 1 #f (mat4-mult P V))
   (glBindVertexArray vao)
   ;; ★一次调用画 100 个（图元, 索引数, 索引类型, 起点, 实例数）
   (glDrawElementsInstanced GL_TRIANGLES 36 GL_UNSIGNED_SHORT 0 N))

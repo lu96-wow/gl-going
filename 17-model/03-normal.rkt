@@ -32,6 +32,7 @@
 (require racket/base)
 (require racket/string racket/list racket/path)
 (require ffi/vector)                       ; f32vector / u32vector
+(require "../racket-glsl/rename-vector.rkt") ; vec2/vec3/concat-vecs
 (require racket/runtime-path)
 
 (define-runtime-path cube-obj "assets/cube.obj")
@@ -47,9 +48,9 @@
       (define toks (string-split l))
       (when (pair? toks)
         (case (car toks)
-          [("v")  (set! vs  (cons (map string->number (cdr toks)) vs))]
-          [("vt") (set! vts (cons (map string->number (cdr toks)) vts))]
-          [("vn") (set! vns (cons (map string->number (cdr toks)) vns))]
+          [("v")  (set! vs  (cons (map (lambda (x) (exact->inexact (string->number x))) (cdr toks)) vs))]
+          [("vt") (set! vts (cons (map (lambda (x) (exact->inexact (string->number x))) (cdr toks)) vts))]
+          [("vn") (set! vns (cons (map (lambda (x) (exact->inexact (string->number x))) (cdr toks)) vns))]
           [("f")  (set! fs  (cons (cdr toks) fs))]
           [else #f]))
       (loop (read-line ip 'any))))
@@ -76,34 +77,46 @@
   ;; ---- ③ 编号 → 局部坐标 / uv（1 起始 → sub1；缺 vt 给 (0,0)）----
   (define (ploc i)
     (define q (vector-ref vtab (sub1 i)))
-    (list (* (- (car q) cx) sc) (* (- (cadr q) cy) sc) (* (- (caddr q) cz) sc)))
+    (vec3 (* (- (car q) cx) sc) (* (- (cadr q) cy) sc) (* (- (caddr q) cz) sc)))
   (define (uvl i)
     (if (and i (pair? vts))
-        (let ([q (vector-ref vttab (sub1 i))]) (list (car q) (cadr q)))
-        '(0.0 0.0)))
-  (define (nloc i) (vector-ref vntab (sub1 i)))
+        (let ([q (vector-ref vttab (sub1 i))]) (vec2 (car q) (cadr q)))
+        (vec2 0.0 0.0)))
+  (define (nloc i)
+    (define q (vector-ref vntab (sub1 i)))
+    (vec3 (car q) (cadr q) (caddr q)))
 
-  ;; 向量小工具：叉积 / 减法 / 归一化（叉积给"缺 vn 的面"现场算面法线）
-  (define (cross a b)
-    (list (- (* (cadr a) (caddr b)) (* (caddr a) (cadr b)))
-          (- (* (caddr a) (car b)) (* (car a) (caddr b)))
-          (- (* (car a) (cadr b)) (* (cadr a) (car b)))))
-  (define (sub a b) (list (- (car a) (car b)) (- (cadr a) (cadr b)) (- (caddr a) (caddr b))))
-  (define (norm a)
-    (define l (sqrt (+ (* (car a) (car a)) (* (cadr a) (cadr a)) (* (caddr a) (caddr a)))))
-    (if (zero? l) '(0.0 1.0 0.0) (list (/ (car a) l) (/ (cadr a) l) (/ (caddr a) l))))
+  ;; 向量小工具：vec3 的减法 / 叉积 / 归一化（叉积给"缺 vn 的面"现场算面法线）
+  (define (vec3-sub a b)
+    (vec3 (- (f32vector-ref a 0) (f32vector-ref b 0))
+          (- (f32vector-ref a 1) (f32vector-ref b 1))
+          (- (f32vector-ref a 2) (f32vector-ref b 2))))
+  (define (vec3-cross a b)
+    (vec3 (- (* (f32vector-ref a 1) (f32vector-ref b 2))
+             (* (f32vector-ref a 2) (f32vector-ref b 1)))
+          (- (* (f32vector-ref a 2) (f32vector-ref b 0))
+             (* (f32vector-ref a 0) (f32vector-ref b 2)))
+          (- (* (f32vector-ref a 0) (f32vector-ref b 1))
+             (* (f32vector-ref a 1) (f32vector-ref b 0)))))
+  (define (vec3-normalize a)
+    (define l (sqrt (+ (* (f32vector-ref a 0) (f32vector-ref a 0))
+                       (* (f32vector-ref a 1) (f32vector-ref a 1))
+                       (* (f32vector-ref a 2) (f32vector-ref a 2)))))
+    (if (zero? l)
+        (vec3 0.0 1.0 0.0)
+        (vec3 (/ (f32vector-ref a 0) l)
+              (/ (f32vector-ref a 1) l)
+              (/ (f32vector-ref a 2) l))))
 
   ;; ---- ④ 面 → 角点流：扇形三角化 + 去重（02 步）+ 法线 ----
   (define lookup (make-hash))          ; 角点键 → 顶点下标
-  (define entries '())                 ; (下标 . 8-float) 暂存
+  (define entries '())                 ; (下标 . (pos nrm uv)) 暂存
   (define total 0)
   (define any-flat? #f)
   (define (ensure! key pos nrm uv)
     (define hit (hash-ref lookup key #f))
     (cond [hit hit]
-          [else (set! entries (cons (cons total (list (car pos) (cadr pos) (caddr pos)
-                                                      (car nrm) (cadr nrm) (caddr nrm)
-                                                      (car uv) (cadr uv))) entries))
+          [else (set! entries (cons (cons total (list pos nrm uv)) entries))
                 (hash-set! lookup key total)
                 (set! total (add1 total))
                 (sub1 total)]))
@@ -124,7 +137,7 @@
       (define p0 (ploc (car (list-ref corners 0))))
       (define p1 (ploc (car (list-ref corners 1))))
       (define p2 (ploc (car (list-ref corners 2))))
-      (define face-n (norm (cross (sub p1 p0) (sub p2 p0))))   ; 面法线（缺 vn 时用）
+      (define face-n (vec3-normalize (vec3-cross (vec3-sub p1 p0) (vec3-sub p2 p0))))   ; 面法线（缺 vn 时用）
       (define (emit c)
         (define vn-idx (caddr c))
         ;; ★有 vn 就用文件法线；没有就用面法线，且键里带面编号 → 硬边
@@ -146,7 +159,7 @@
   (define placed (make-vector total #f))
   (for ([e entries]) (vector-set! placed (car e) (cdr e)))
   (define ordered (for/list ([id (in-range total)]) (vector-ref placed id)))
-  (define verts (apply f32vector (map exact->inexact (apply append ordered))))
+  (define verts (apply concat-vecs (apply append ordered)))
   (define idx   (apply u32vector (reverse idxl)))
   (define tris  (quotient (length idxl) 3))
   (define summary

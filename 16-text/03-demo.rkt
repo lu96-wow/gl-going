@@ -147,11 +147,18 @@
        (define u0 (list-ref g 0)) (define v0 (list-ref g 1))
        (define u1 (list-ref g 2)) (define v1 (list-ref g 3))
        (define wpx (* (list-ref g 4) scale)) (define x1 (+ px wpx))
-       (set! parts (append parts (list px y0 u0 v0   x1 y0 u1 v0   x1 y1 u1 v1
-                                       px y0 u0 v0   x1 y1 u1 v1   px y1 u0 v1)))
+       ;; 一个字符 = 2 个三角形（6 顶点），每顶点 = 位置(vec2) + uv(vec2)
+       (set! parts (append parts
+                           (list (concat-vecs (vec2 px y0) (vec2 u0 v0)
+                                              (vec2 x1 y0) (vec2 u1 v0)
+                                              (vec2 x1 y1) (vec2 u1 v1)
+                                              (vec2 px y0) (vec2 u0 v0)
+                                              (vec2 x1 y1) (vec2 u1 v1)
+                                              (vec2 px y1) (vec2 u0 v1)))))
        (set! px x1)]
       [else (set! px (+ px (* scale (list-ref (hash-ref glyphs #\space) 4))))]))
-  (values (apply f32vector parts) (quotient (length parts) 4)))
+  (define data (apply concat-vecs parts))
+  (values data (quotient (f32vector-length data) 4)))
 
 (define (draw-text s x by scale color)
   (glUniform4f loc-color (list-ref color 0) (list-ref color 1)
@@ -162,13 +169,13 @@
   (glBufferData GL_ARRAY_BUFFER (gl-vector-sizeof data) data GL_DYNAMIC_DRAW)
   (glDrawArrays GL_TRIANGLES 0 n))
 
-;; 3D 点 (x,y,z) 经 MVP 投影到屏幕像素
+;; 3D 点 (x,y,z) 经 MVP 投影到屏幕像素（GLSL 里就是 (mvp * vec4(x y z 1.0)) 的透视除法）
 (define (project-to-screen m px py pz gw gh)
-  (define (el c r) (f64vector-ref m (+ (* 4 c) r)))
-  (define w (+ (* (el 3 0) px) (* (el 3 1) py) (* (el 3 2) pz) (el 3 3)))
+  (define clip (mat4*vec4 m (vec4 px py pz 1.0)))
+  (define w (f32vector-ref clip 3))
   (if (<= w 0.0) #f
-      (let ([cx (/ (+ (* (el 0 0) px) (* (el 0 1) py) (* (el 0 2) pz) (el 0 3)) w)]
-            [cy (/ (+ (* (el 1 0) px) (* (el 1 1) py) (* (el 1 2) pz) (el 1 3)) w)])
+      (let ([cx (/ (f32vector-ref clip 0) w)]
+            [cy (/ (f32vector-ref clip 1) w)])
         (values (* (+ (* cx 0.5) 0.5) gw) (* (- 0.5 (* cy 0.5)) gh)))))
 
 ;; FPS
@@ -188,9 +195,9 @@
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (define-values (w h) (send canvas get-gl-client-size))
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))
-  (define V (m4-mult (m4-translate 0.0 0.0 -6.0) (m4-rot-y 20.0)))
-  (define M1 (m4-mult (m4-rot-y (* t 70.0)) (m4-rot-x (* t 45.0))))
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))
+  (define V (mat4-mult (mat4-translate 0.0 0.0 -6.0) (mat4-rot-y 20.0)))
+  (define M1 (mat4-mult (mat4-rot-y (* t 70.0)) (mat4-rot-x (* t 45.0))))
 
   ;; ---- 第 1 遍：3D 场景 ----
   (glViewport 0 0 w h)
@@ -199,14 +206,14 @@
   (glClearColor 0.08 0.09 0.14 1.0)
   (glUseProgram prog-scene)
   (define (draw-cube-at M)
-    (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) M)))
+    (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) M))
     (glBindVertexArray vao-cube)
     (glDrawElements GL_TRIANGLES 36 GL_UNSIGNED_SHORT 0))
   (draw-cube-at M1)
   (for ([k (in-range 3)])
     (define a (* (/ PI 180.0) (+ (* k 120.0) (* t 90.0))))
-    (draw-cube-at (m4-mult (m4-translate (* 2.6 (cos a)) 0.0 (- (* 2.6 (sin a))))
-                           (m4-rot-y (* t -60.0)))))
+    (draw-cube-at (mat4-mult (mat4-translate (* 2.6 (cos a)) 0.0 (- (* 2.6 (sin a))))
+                           (mat4-rot-y (* t -60.0)))))
 
   ;; ---- 第 2 遍：屏幕文字 ----
   (glDisable GL_DEPTH_TEST)
@@ -217,7 +224,7 @@
   (glBindTexture GL_TEXTURE_2D tex-atlas)
   (glUniform1i loc-font 0)
   (glUniformMatrix4fv loc-proj 1 #f
-                      (mat4 (m4-ortho 0.0 (exact->inexact w) (exact->inexact h) 0.0 -1.0 1.0)))
+                       (mat4-ortho 0.0 (exact->inexact w) (exact->inexact h) 0.0 -1.0 1.0))
   (when (unbox text-on?)
     (draw-text "GLYPH ATLAS TEXT" 16.0 62.0 0.62 '(0.95 0.85 0.30 1.0))
     (draw-text "one texture, latin + CJK 中英文混排" 18.0 92.0 0.40 '(0.75 0.80 0.95 1.0))
@@ -225,7 +232,7 @@
     (draw-text zh (- (exact->inexact w) 16.0 (string-width zh glyphs 0.40))
                92.0 0.40 '(0.45 0.95 0.90 1.0))
     ;; 3D 标签：把立方体中心投影到屏幕
-    (define mvp1 (m4-mult (m4-mult P V) M1))
+    (define mvp1 (mat4-mult (mat4-mult P V) M1))
     (define-values (sx sy) (project-to-screen mvp1 0.0 0.0 0.0 w h))
     (define label "立方体 #1")
     (define ls 0.55)

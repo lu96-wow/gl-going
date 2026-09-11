@@ -46,9 +46,9 @@
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (define-values (w h) (send canvas get-gl-client-size))
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))
-  (define V (m4-look-at 0.0 1.0 5.0  0.0 0.0 0.0  0.0 1.0 0.0))
-  (define M (m4-mult (m4-rot-y (* t 60.0)) (m4-rot-x (* t 30.0))))
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))
+  (define V (mat4-look-at 0.0 1.0 5.0  0.0 0.0 0.0  0.0 1.0 0.0))
+  (define M (mat4-mult (mat4-rot-y (* t 60.0)) (mat4-rot-x (* t 30.0))))
 
   (glClearColor 0.10 0.11 0.17 1.0)
   (glClear (bitwise-ior GL_COLOR_BUFFER_BIT GL_DEPTH_BUFFER_BIT))
@@ -56,7 +56,7 @@
   (glUniform1i loc-tex 0)
   (glActiveTexture GL_TEXTURE0)
   (glBindTexture GL_TEXTURE_2D tex)
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) M)))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) M))
   (glBindVertexArray vao)
   (glDrawElements GL_TRIANGLES 36 GL_UNSIGNED_SHORT 0))
 

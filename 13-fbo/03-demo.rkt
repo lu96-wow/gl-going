@@ -109,8 +109,8 @@
     (set-box! fbo-w w) (set-box! fbo-h h))
 
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))
-  (define V (m4-translate 0.0 0.0 -6.0))
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))
+  (define V (mat4-translate 0.0 0.0 -6.0))
 
   (glBindFramebuffer GL_FRAMEBUFFER (unbox fbo))
   (glViewport 0 0 w h)
@@ -119,16 +119,16 @@
   (glClear (bitwise-ior GL_COLOR_BUFFER_BIT GL_DEPTH_BUFFER_BIT))
   (glUseProgram prog-scene)
   (define (draw-cube m)
-    (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) m)))
+    (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) m))
     (glBindVertexArray vao-cube)
     (glDrawElements GL_TRIANGLES 36 GL_UNSIGNED_SHORT 0))
   ;; 中央翻滚 + 两颗绕行
-  (draw-cube (m4-mult (m4-mult (m4-rot-y (* t 60.0)) (m4-rot-x (* t 40.0)))
-                      (m4-scale 0.6 0.6 0.6)))
+  (draw-cube (mat4-mult (mat4-mult (mat4-rot-y (* t 60.0)) (mat4-rot-x (* t 40.0)))
+                      (mat4-scale 0.6 0.6 0.6)))
   (for ([k (in-range 2)])
     (define a (* (/ PI 180.0) (+ (* k 180.0) (* t 80.0))))
-    (draw-cube (m4-mult (m4-translate (* 2.2 (cos a)) 0.0 (- (* 2.2 (sin a))))
-                        (m4-mult (m4-rot-y (* t -90.0)) (m4-scale 0.4 0.4 0.4)))))
+    (draw-cube (mat4-mult (mat4-translate (* 2.2 (cos a)) 0.0 (- (* 2.2 (sin a))))
+                        (mat4-mult (mat4-rot-y (* t -90.0)) (mat4-scale 0.4 0.4 0.4)))))
 
   (glBindFramebuffer GL_FRAMEBUFFER 0)
   (glViewport 0 0 w h)

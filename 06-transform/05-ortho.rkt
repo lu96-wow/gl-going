@@ -47,9 +47,9 @@
 
 ;; 正交投影（裸写，本步主角）：把 [l,r]×[b,t] 映射到 NDC。
 ;; 这里 l=0,r=w,b=h,t=0（像素世界、左上原点、y 向下），n=-1,f=1。
-(define (m4-ortho l r b t n f)
+(define (mat4-ortho l r b t n f)
   (define rl (- r l)) (define tb (- t b)) (define fn (- f n))
-  (f64vector (/ 2.0 rl) 0.0 0.0 0.0
+  (mat4 (/ 2.0 rl) 0.0 0.0 0.0
              0.0 (/ 2.0 tb) 0.0 0.0
              0.0 0.0 (/ -2.0 fn) 0.0
              (- (/ (+ r l) rl)) (- (/ (+ t b) tb)) (- (/ (+ f n) fn)) 1.0))
@@ -62,15 +62,15 @@
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   ;; 真实像素尺寸（和 glViewport 用的同一个数）
   (define-values (w h) (send canvas get-gl-client-size))
-  (define P (m4-ortho 0.0 (exact->inexact w) (exact->inexact h) 0.0 -1.0 1.0))
+  (define P (mat4-ortho 0.0 (exact->inexact w) (exact->inexact h) 0.0 -1.0 1.0))
   ;; 模型矩阵：先缩放(300×200 像素) 再旋转 再平移到窗口中心
-  (define M (m4-mult (m4-translate (/ w 2.0) (/ h 2.0))
-                     (m4-mult (m4-rot-z (* t 60.0))
-                              (m4-scale 300.0 200.0))))
+  (define M (mat4-mult (mat4-translate (/ w 2.0) (/ h 2.0))
+                     (mat4-mult (mat4-rot-z (* t 60.0))
+                              (mat4-scale 300.0 200.0))))
   (glClearColor 0.07 0.08 0.14 1.0)
   (glClear GL_COLOR_BUFFER_BIT)
   (glUseProgram prog)
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult P M)))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult P M))
   (glUniform3f loc-color 0.30 0.65 0.95)
   (glBindVertexArray vao)
   (glDrawElements GL_TRIANGLES 6 GL_UNSIGNED_SHORT 0))

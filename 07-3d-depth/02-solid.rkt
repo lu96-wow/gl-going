@@ -79,14 +79,14 @@
 
 (define (draw)
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
-  (define V (m4-translate 0.0 0.0 -6.0))
-  (define P (m4-ortho -2.0 2.0 -2.0 2.0 0.1 100.0))
-  (define M (m4-mult (m4-rot-y (* t 40.0)) (m4-rot-x (* t 30.0))))  ; 绕 y 再绕 x 翻滚
+  (define V (mat4-translate 0.0 0.0 -6.0))
+  (define P (mat4-ortho -2.0 2.0 -2.0 2.0 0.1 100.0))
+  (define M (mat4-mult (mat4-rot-y (* t 40.0)) (mat4-rot-x (* t 30.0))))  ; 绕 y 再绕 x 翻滚
   (glClearColor 0.07 0.08 0.14 1.0)
   ;; ★每帧同时清 颜色 和 深度（深度不清的话上一帧的 z 还留着，会画错）
   (glClear (bitwise-ior GL_COLOR_BUFFER_BIT GL_DEPTH_BUFFER_BIT))
   (glUseProgram prog)
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) M)))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) M))
   (glBindVertexArray vao)
   (glDrawElements GL_TRIANGLES 36 GL_UNSIGNED_SHORT 0))
 

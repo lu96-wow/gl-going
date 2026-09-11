@@ -20,8 +20,8 @@
 (require "../racket-glsl/rename-vector.rkt") ; vec2/vec3/vec4、concat-vecs、mat4
 
 (provide build-program
-         m4-identity m4-translate m4-rot-x m4-rot-y m4-rot-z
-         m4-scale m4-mult m4-ortho m4-perspective m4-look-at
+         mat4-identity mat4-translate mat4-rot-x mat4-rot-y mat4-rot-z
+         mat4-scale mat4-mult mat4*vec4 mat4-ortho mat4-perspective mat4-look-at
          cube-verts cube-idx grid-verts
          load-tex cube-uv-verts cube-uv-idx
          cube-normal-verts cube-normal-idx
@@ -65,90 +65,109 @@
   prog)
 
 ;; =========================================================
-;; m4-*：4×4 矩阵工具（列主序 f64vector[16]，元素 (r行,c列) 存下标 c*4+r）
-;; 前 3 步裸写、第 4 步收进这里；第 5 步加 m4-ortho。
-;; 数学用 f64 保证精度，上传前用 rename-vector 的 (mat4 ...) 转 f32。
+;; mat4-*：4×4 矩阵工具（列主序 mat4 = f32vector[16]，元素 (r行,c列) 存下标 c*4+r）
+;; 前 3 步裸写、第 4 步收进这里；第 5 步加 mat4-ortho。
+;; 数学用 f32，与 GL 的 float 一致，上传零转换。
 ;; =========================================================
 
-(define (m4-identity)
-  (f64vector 1.0 0.0 0.0 0.0
+(define (mat4-identity)
+  (mat4 1.0 0.0 0.0 0.0
              0.0 1.0 0.0 0.0
              0.0 0.0 1.0 0.0
              0.0 0.0 0.0 1.0))
 
-(define (m4-translate tx ty tz)
-  (f64vector 1.0 0.0 0.0 0.0
+(define (mat4-translate tx ty tz)
+  (mat4 1.0 0.0 0.0 0.0
              0.0 1.0 0.0 0.0
              0.0 0.0 1.0 0.0
              tx  ty  tz  1.0))
 
 ;; 旋转（绕各轴，角度制）。绕 z 就是 2D 旋转；绕 x/y 是 3D 新增的。
-(define (m4-rot-z deg)
+(define (mat4-rot-z deg)
   (define r (* (/ (acos -1.0) 180.0) deg))
   (define c (cos r))
   (define s (sin r))
-  (f64vector c     s     0.0 0.0
+  (mat4 c     s     0.0 0.0
              (- s) c     0.0 0.0
              0.0   0.0   1.0 0.0
              0.0   0.0   0.0 1.0))
 
-(define (m4-rot-x deg)
+(define (mat4-rot-x deg)
   (define r (* (/ (acos -1.0) 180.0) deg))
   (define c (cos r))
   (define s (sin r))
-  (f64vector 1.0 0.0    0.0   0.0
+  (mat4 1.0 0.0    0.0   0.0
              0.0 c     s     0.0
              0.0 (- s) c     0.0
              0.0 0.0    0.0   1.0))
 
-(define (m4-rot-y deg)
+(define (mat4-rot-y deg)
   (define r (* (/ (acos -1.0) 180.0) deg))
   (define c (cos r))
   (define s (sin r))
-  (f64vector c    0.0 (- s) 0.0
+  (mat4 c    0.0 (- s) 0.0
              0.0  1.0 0.0    0.0
              s    0.0 c      0.0
              0.0  0.0 0.0    1.0))
 
-(define (m4-scale sx sy sz)
-  (f64vector sx  0.0 0.0 0.0
+(define (mat4-scale sx sy sz)
+  (mat4 sx  0.0 0.0 0.0
              0.0 sy  0.0 0.0
              0.0 0.0 sz  0.0
              0.0 0.0 0.0 1.0))
 
 ;; A·B（先作用 B，再作用 A）
-(define (m4-mult A B)
-  (define R (make-f64vector 16 0.0))
+(define (mat4-mult A B)
+  (define R (make-f32vector 16 0.0))
   (for* ([c (in-range 4)] [r (in-range 4)] [k (in-range 4)])
-    (f64vector-set! R (+ (* 4 c) r)
-                    (+ (f64vector-ref R (+ (* 4 c) r))
-                       (* (f64vector-ref A (+ (* 4 k) r))
-                          (f64vector-ref B (+ (* 4 c) k))))))
+    (f32vector-set! R (+ (* 4 c) r)
+                    (+ (f32vector-ref R (+ (* 4 c) r))
+                       (* (f32vector-ref A (+ (* 4 k) r))
+                          (f32vector-ref B (+ (* 4 c) k))))))
   R)
 
+;; mat4 × vec4（GLSL 的 (m * v)；列主序 m）
+(define (mat4*vec4 m v)
+  (vec4 (+ (* (f32vector-ref m 0)  (f32vector-ref v 0))
+           (* (f32vector-ref m 4)  (f32vector-ref v 1))
+           (* (f32vector-ref m 8)  (f32vector-ref v 2))
+           (* (f32vector-ref m 12) (f32vector-ref v 3)))
+        (+ (* (f32vector-ref m 1)  (f32vector-ref v 0))
+           (* (f32vector-ref m 5)  (f32vector-ref v 1))
+           (* (f32vector-ref m 9)  (f32vector-ref v 2))
+           (* (f32vector-ref m 13) (f32vector-ref v 3)))
+        (+ (* (f32vector-ref m 2)  (f32vector-ref v 0))
+           (* (f32vector-ref m 6)  (f32vector-ref v 1))
+           (* (f32vector-ref m 10) (f32vector-ref v 2))
+           (* (f32vector-ref m 14) (f32vector-ref v 3)))
+        (+ (* (f32vector-ref m 3)  (f32vector-ref v 0))
+           (* (f32vector-ref m 7)  (f32vector-ref v 1))
+           (* (f32vector-ref m 11) (f32vector-ref v 2))
+           (* (f32vector-ref m 15) (f32vector-ref v 3)))))
+
 ;; 正交投影：把 [l,r]×[b,t]（深度 [n,f]）映射到 NDC。
-;; 像素世界（左上原点、y 向下）用 (m4-ortho 0 w h 0 -1 1)。
-(define (m4-ortho l r b t n f)
+;; 像素世界（左上原点、y 向下）用 (mat4-ortho 0 w h 0 -1 1)。
+(define (mat4-ortho l r b t n f)
   (define rl (- r l)) (define tb (- t b)) (define fn (- f n))
-  (f64vector (/ 2.0 rl) 0.0 0.0 0.0
+  (mat4 (/ 2.0 rl) 0.0 0.0 0.0
              0.0 (/ 2.0 tb) 0.0 0.0
              0.0 0.0 (/ -2.0 fn) 0.0
              (- (/ (+ r l) rl)) (- (/ (+ t b) tb)) (- (/ (+ f n) fn)) 1.0))
 
 ;; 透视投影：fovy=垂直视角(度)、aspect=宽/高、near/far=近远平面(正数)。
 ;; 让 w=-z，GPU 透视除法后产生"近大远小"。
-(define (m4-perspective fovy aspect near far)
+(define (mat4-perspective fovy aspect near far)
   (define f (/ 1.0 (tan (* 0.5 (/ (acos -1.0) 180.0) fovy))))
   (define nf (/ (+ near far) (- near far)))
   (define n2f (/ (* 2.0 near far) (- near far)))
-  (f64vector (/ f aspect) 0.0 0.0 0.0
+  (mat4 (/ f aspect) 0.0 0.0 0.0
              0.0 f 0.0 0.0
              0.0 0.0 nf -1.0
              0.0 0.0 n2f 0.0))
 
 ;; 视图矩阵 lookAt：eye=(ex,ey,ez) 看向 center=(cx,cy,cz)，up=(ux,uy,uz)。
 ;; 用 f（前）、s（右）、u（上）三个正交基向量 + 平移拼成"把世界搬到相机面前"的矩阵。
-(define (m4-look-at ex ey ez cx cy cz ux uy uz)
+(define (mat4-look-at ex ey ez cx cy cz ux uy uz)
   (define fx (- cx ex)) (define fy (- cy ey)) (define fz (- cz ez))
   (define fl (sqrt (+ (* fx fx) (* fy fy) (* fz fz))))
   (define fxx (/ fx fl)) (define fyy (/ fy fl)) (define fzz (/ fz fl))
@@ -160,7 +179,7 @@
   (define uxx (- (* syy fzz) (* szz fyy)))
   (define uyy (- (* szz fxx) (* sxx fzz)))
   (define uzz (- (* sxx fyy) (* syy fxx)))
-  (f64vector sxx uxx (- fxx) 0.0
+  (mat4 sxx uxx (- fxx) 0.0
              syy uyy (- fyy) 0.0
              szz uzz (- fzz) 0.0
              (- (+ (* sxx ex) (* syy ey) (* szz ez)))

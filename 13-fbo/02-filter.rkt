@@ -115,8 +115,8 @@
     (set-box! fbo-w w) (set-box! fbo-h h))
 
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))
-  (define V (m4-translate 0.0 0.0 -6.0))
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))
+  (define V (mat4-translate 0.0 0.0 -6.0))
 
   (glBindFramebuffer GL_FRAMEBUFFER (unbox fbo))
   (glViewport 0 0 w h)
@@ -124,9 +124,9 @@
   (glClearColor 0.30 0.25 0.35 1.0)
   (glClear (bitwise-ior GL_COLOR_BUFFER_BIT GL_DEPTH_BUFFER_BIT))
   (glUseProgram prog-scene)
-  (define M (m4-mult (m4-mult (m4-rot-y (* t 60.0)) (m4-rot-x (* t 40.0)))
-                     (m4-scale 0.6 0.6 0.6)))
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) M)))
+  (define M (mat4-mult (mat4-mult (mat4-rot-y (* t 60.0)) (mat4-rot-x (* t 40.0)))
+                     (mat4-scale 0.6 0.6 0.6)))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) M))
   (glBindVertexArray vao-cube)
   (glDrawElements GL_TRIANGLES 36 GL_UNSIGNED_SHORT 0)
 

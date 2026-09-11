@@ -52,8 +52,8 @@
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (define-values (w h) (send canvas get-gl-client-size))
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))
-  (define V (m4-look-at 0.0 0.0 5.0  0.0 0.0 0.0  0.0 1.0 0.0))
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))
+  (define V (mat4-look-at 0.0 0.0 5.0  0.0 0.0 0.0  0.0 1.0 0.0))
 
   (glEnable GL_BLEND)
   (glBlendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA)
@@ -65,8 +65,8 @@
   ;; 不透明立方体（远处背景，写深度）
   (glUniform1f loc-alpha 1.0)
   (glUniform3f loc-tint 0.70 0.72 0.80)
-  (define M (m4-mult (m4-translate 0.0 0.0 -2.0) (m4-scale 0.8 0.8 0.8)))
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) M)))
+  (define M (mat4-mult (mat4-translate 0.0 0.0 -2.0) (mat4-scale 0.8 0.8 0.8)))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) M))
   (glDrawElements GL_TRIANGLES 36 GL_UNSIGNED_SHORT 0)
 
   ;; 透明玻璃：关深度写入（本步重点在顺序，深度写入坑下一步讲）
@@ -74,8 +74,8 @@
   (glUniform1f loc-alpha 0.5)
   (define (glass tint z sz)
     (glUniform3f loc-tint (list-ref tint 0) (list-ref tint 1) (list-ref tint 2))
-    (define G (m4-mult (m4-translate 0.0 0.0 z) (m4-scale sz sz 0.02)))
-    (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) G)))
+    (define G (mat4-mult (mat4-translate 0.0 0.0 z) (mat4-scale sz sz 0.02)))
+    (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) G))
     (glDrawElements GL_TRIANGLES 36 GL_UNSIGNED_SHORT 0))
   ;; 远玻璃红色（大一点，能看到边）、近玻璃蓝色（小一点，重叠区看顺序）
   (if (unbox far-first?)

@@ -70,8 +70,8 @@
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (define-values (w h) (send canvas get-gl-client-size))
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))
-  (define V (m4-translate 0.0 0.0 -5.0))
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))
+  (define V (mat4-translate 0.0 0.0 -5.0))
 
   (glEnable GL_CULL_FACE)   ; 剔除始终开
   (glClearColor 0.08 0.09 0.14 1.0)
@@ -79,7 +79,7 @@
   (glUseProgram prog)
   (define yaw (if (unbox spin?) (* t 45.0) -15.0))
   (glUniformMatrix4fv loc-mvp 1 #f
-                      (mat4 (m4-mult (m4-mult P V) (m4-rot-y yaw))))
+                       (mat4-mult (mat4-mult P V) (mat4-rot-y yaw)))
   (glBindVertexArray vao)
   (glDrawElements GL_TRIANGLES 6 GL_UNSIGNED_SHORT 0))
 

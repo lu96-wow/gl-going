@@ -5,7 +5,7 @@
 ;; =========================================================
 ;; 本课前五步：平移(01)、旋转缩放(02)、矩阵乘法与顺序(03)、收进 lib(04)、
 ;; 正交投影像素世界(05)。本步**不引入新语法**，把老教程 05-transform 的
-;; 成品拼出来，顺带把 05 步裸写的 m4-ortho 也收进了 lib.rkt。
+;; 成品拼出来，顺带把 05 步裸写的 mat4-ortho 也收进了 lib.rkt。
 ;;
 ;; 画面（800×600 像素世界）：
 ;;   中央大矩形：绕自己中心自转
@@ -17,7 +17,7 @@
 ;; =========================================================
 
 (require "lib-gui.rkt")
-(require "lib.rkt")     ; 现在 m4-* 全在 lib 里了（含 m4-ortho）
+(require "lib.rkt")     ; 现在 mat4-* 全在 lib 里了（含 mat4-ortho）
 
 (define PI (acos -1.0))
 (define start-ms (current-inexact-milliseconds))
@@ -43,15 +43,15 @@
 (define (draw)
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (define-values (w h) (send canvas get-gl-client-size))
-  (define P (m4-ortho 0.0 (exact->inexact w) (exact->inexact h) 0.0 -1.0 1.0))
+  (define P (mat4-ortho 0.0 (exact->inexact w) (exact->inexact h) 0.0 -1.0 1.0))
 
   ;; 画一个"单位方块"：给中心(cx,cy)、半宽半高(hx,hy)、角度、颜色
   (define (quad cx cy hx hy ang r g b)
-    (define S (m4-scale (* 2.0 hx) (* 2.0 hy)))
-    (define R (m4-rot-z ang))
-    (define T (m4-translate cx cy))
-    (define M (m4-mult T (m4-mult R S)))   ; T·R·S（先缩放再旋转最后平移）
-    (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult P M)))
+    (define S (mat4-scale (* 2.0 hx) (* 2.0 hy)))
+    (define R (mat4-rot-z ang))
+    (define T (mat4-translate cx cy))
+    (define M (mat4-mult T (mat4-mult R S)))   ; T·R·S（先缩放再旋转最后平移）
+    (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult P M))
     (glUniform3f loc-color r g b)
     (glDrawElements GL_TRIANGLES 6 GL_UNSIGNED_SHORT 0))
 

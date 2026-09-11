@@ -65,8 +65,8 @@
 (define (draw)
   (define-values (w h) (send canvas get-gl-client-size))
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))
-  (define V (m4-translate 0.0 0.0 -5.0))
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))
+  (define V (mat4-translate 0.0 0.0 -5.0))
 
   (glEnable GL_CULL_FACE)
   (glFrontFace (if (unbox front-ccw?) GL_CCW GL_CW))   ; ★正面绕序的约定
@@ -75,8 +75,8 @@
   (glUseProgram prog)
   (define (draw-quad x yaw vao)
     (glUniformMatrix4fv loc-mvp 1 #f
-                        (mat4 (m4-mult (m4-mult P V)
-                                       (m4-mult (m4-translate x 0.0 0.0) (m4-rot-y yaw)))))
+                         (mat4-mult (mat4-mult P V)
+                                       (mat4-mult (mat4-translate x 0.0 0.0) (mat4-rot-y yaw))))
     (glBindVertexArray vao)
     (glDrawElements GL_TRIANGLES 6 GL_UNSIGNED_SHORT 0))
   (draw-quad -1.7 -15.0 vao-ccw)

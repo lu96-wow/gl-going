@@ -16,7 +16,7 @@
 ;;
 ;; ★"假相机"：顶点要落在 -z 方向才能被看见，所以先把世界往后推 6 个单位
 ;;   （V = 平移 (0,0,-6)），立方体仍放在原点。真正的相机 08 课讲 lookAt。
-;;   本步用正交投影（06 课的 m4-ortho，只是给 z 也设了范围）——透视下一步。
+;;   本步用正交投影（06 课的 mat4-ortho，只是给 z 也设了范围）——透视下一步。
 ;;
 ;; ★线框不启用深度测试：这样背面的边也画得出来，立方体"透亮"、能看穿。
 ;;   （实心面就需要深度了——下一步。）
@@ -56,13 +56,13 @@
 
 (define (draw)
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
-  (define V (m4-translate 0.0 0.0 -6.0))                 ; 假相机：世界往后推 6
-  (define P (m4-ortho -2.0 2.0 -2.0 2.0 0.1 100.0))      ; 正交投影
-  (define M (m4-rot-y (* t 40.0)))                       ; 绕 y 旋转
+  (define V (mat4-translate 0.0 0.0 -6.0))                 ; 假相机：世界往后推 6
+  (define P (mat4-ortho -2.0 2.0 -2.0 2.0 0.1 100.0))      ; 正交投影
+  (define M (mat4-rot-y (* t 40.0)))                       ; 绕 y 旋转
   (glClearColor 0.07 0.08 0.14 1.0)
   (glClear GL_COLOR_BUFFER_BIT)
   (glUseProgram prog)
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) M)))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) M))
   (glUniform3f loc-color 0.40 0.75 0.95)
   (glBindVertexArray vao)
   (glDrawElements GL_LINES 24 GL_UNSIGNED_SHORT 0))

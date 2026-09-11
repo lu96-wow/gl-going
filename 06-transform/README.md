@@ -7,15 +7,15 @@
 完成所有变换——这是整个 3D 的核心数学。本课先把 2D 讲透（平移/旋转/缩放/
 矩阵乘法/正交投影），3D 透视留给 07 课。
 
-本文件夹的 lib 采用"每课一份复制"；**本课的 lib.rkt 会新增矩阵工具**（m4-*）：
+本文件夹的 lib 采用"每课一份复制"；**本课的 lib.rkt 会新增矩阵工具**（mat4-*）：
 
 - `lib-gui.rkt` —— 从 05 复制（本课未改动）
-- `lib.rkt` —— 前 3 步裸写矩阵，第 4 步收进 lib（m4-translate / m4-rot-z / m4-scale / m4-mult），
-  第 5 步加 m4-ortho
+- `lib.rkt` —— 前 3 步裸写矩阵，第 4 步收进 lib（mat4-translate / mat4-rot-z / mat4-scale / mat4-mult），
+  第 5 步加 mat4-ortho
 
 1. `01-translate.rkt` **uniform mat4 + 平移矩阵**：齐次坐标为什么是 4×4，方块平移
 2. `02-rot-scale.rkt` **旋转 + 缩放矩阵**：sin/cos 的旋转、对角线的缩放
 3. `03-order.rkt`     **矩阵乘法 + T·R·S 顺序**：两个方块正反顺序对比（不交换律）
-4. `04-lib.rkt`       **收进 lib.rkt**：把前三步裸写的矩阵函数提取成 m4-*
+4. `04-lib.rkt`       **收进 lib.rkt**：把前三步裸写的矩阵函数提取成 mat4-*
 5. `05-ortho.rkt`     **正交投影**：像素世界坐标 → NDC，用像素定位物体
 6. `06-demo.rkt`      **综合**（无新语法）：像素世界里 旋转大矩形 + 公转小方块

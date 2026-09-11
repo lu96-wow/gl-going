@@ -23,8 +23,8 @@
 (require "../racket-glsl/rename-vector.rkt") ; vec2/vec3/vec4、concat-vecs、mat4
 
 (provide build-program
-         m4-identity m4-translate m4-rot-x m4-rot-y m4-rot-z
-         m4-scale m4-mult m4-ortho m4-perspective m4-look-at
+         mat4-identity mat4-translate mat4-rot-x mat4-rot-y mat4-rot-z
+         mat4-scale mat4-mult mat4-ortho mat4-perspective mat4-look-at
          cube-verts cube-idx grid-verts
          load-tex cube-uv-verts cube-uv-idx
          cube-normal-verts cube-normal-idx
@@ -69,90 +69,90 @@
   prog)
 
 ;; =========================================================
-;; m4-*：4×4 矩阵工具（列主序 f64vector[16]，元素 (r行,c列) 存下标 c*4+r）
-;; 前 3 步裸写、第 4 步收进这里；第 5 步加 m4-ortho。
-;; 数学用 f64 保证精度，上传前用 rename-vector 的 (mat4 ...) 转 f32。
+;; mat4-*：4×4 矩阵工具（列主序 mat4 = f32vector[16]，元素 (r行,c列) 存下标 c*4+r）
+;; 前 3 步裸写、第 4 步收进这里；第 5 步加 mat4-ortho。
+;; 数学用 f32，与 GL 的 float 一致，上传零转换。
 ;; =========================================================
 
-(define (m4-identity)
-  (f64vector 1.0 0.0 0.0 0.0
+(define (mat4-identity)
+  (mat4 1.0 0.0 0.0 0.0
              0.0 1.0 0.0 0.0
              0.0 0.0 1.0 0.0
              0.0 0.0 0.0 1.0))
 
-(define (m4-translate tx ty tz)
-  (f64vector 1.0 0.0 0.0 0.0
+(define (mat4-translate tx ty tz)
+  (mat4 1.0 0.0 0.0 0.0
              0.0 1.0 0.0 0.0
              0.0 0.0 1.0 0.0
              tx  ty  tz  1.0))
 
 ;; 旋转（绕各轴，角度制）。绕 z 就是 2D 旋转；绕 x/y 是 3D 新增的。
-(define (m4-rot-z deg)
+(define (mat4-rot-z deg)
   (define r (* (/ (acos -1.0) 180.0) deg))
   (define c (cos r))
   (define s (sin r))
-  (f64vector c     s     0.0 0.0
+  (mat4 c     s     0.0 0.0
              (- s) c     0.0 0.0
              0.0   0.0   1.0 0.0
              0.0   0.0   0.0 1.0))
 
-(define (m4-rot-x deg)
+(define (mat4-rot-x deg)
   (define r (* (/ (acos -1.0) 180.0) deg))
   (define c (cos r))
   (define s (sin r))
-  (f64vector 1.0 0.0    0.0   0.0
+  (mat4 1.0 0.0    0.0   0.0
              0.0 c     s     0.0
              0.0 (- s) c     0.0
              0.0 0.0    0.0   1.0))
 
-(define (m4-rot-y deg)
+(define (mat4-rot-y deg)
   (define r (* (/ (acos -1.0) 180.0) deg))
   (define c (cos r))
   (define s (sin r))
-  (f64vector c    0.0 (- s) 0.0
+  (mat4 c    0.0 (- s) 0.0
              0.0  1.0 0.0    0.0
              s    0.0 c      0.0
              0.0  0.0 0.0    1.0))
 
-(define (m4-scale sx sy sz)
-  (f64vector sx  0.0 0.0 0.0
+(define (mat4-scale sx sy sz)
+  (mat4 sx  0.0 0.0 0.0
              0.0 sy  0.0 0.0
              0.0 0.0 sz  0.0
              0.0 0.0 0.0 1.0))
 
 ;; A·B（先作用 B，再作用 A）
-(define (m4-mult A B)
-  (define R (make-f64vector 16 0.0))
+(define (mat4-mult A B)
+  (define R (make-f32vector 16 0.0))
   (for* ([c (in-range 4)] [r (in-range 4)] [k (in-range 4)])
-    (f64vector-set! R (+ (* 4 c) r)
-                    (+ (f64vector-ref R (+ (* 4 c) r))
-                       (* (f64vector-ref A (+ (* 4 k) r))
-                          (f64vector-ref B (+ (* 4 c) k))))))
+    (f32vector-set! R (+ (* 4 c) r)
+                    (+ (f32vector-ref R (+ (* 4 c) r))
+                       (* (f32vector-ref A (+ (* 4 k) r))
+                          (f32vector-ref B (+ (* 4 c) k))))))
   R)
 
 ;; 正交投影：把 [l,r]×[b,t]（深度 [n,f]）映射到 NDC。
-;; 像素世界（左上原点、y 向下）用 (m4-ortho 0 w h 0 -1 1)。
-(define (m4-ortho l r b t n f)
+;; 像素世界（左上原点、y 向下）用 (mat4-ortho 0 w h 0 -1 1)。
+(define (mat4-ortho l r b t n f)
   (define rl (- r l)) (define tb (- t b)) (define fn (- f n))
-  (f64vector (/ 2.0 rl) 0.0 0.0 0.0
+  (mat4 (/ 2.0 rl) 0.0 0.0 0.0
              0.0 (/ 2.0 tb) 0.0 0.0
              0.0 0.0 (/ -2.0 fn) 0.0
              (- (/ (+ r l) rl)) (- (/ (+ t b) tb)) (- (/ (+ f n) fn)) 1.0))
 
 ;; 透视投影：fovy=垂直视角(度)、aspect=宽/高、near/far=近远平面(正数)。
 ;; 让 w=-z，GPU 透视除法后产生"近大远小"。
-(define (m4-perspective fovy aspect near far)
+(define (mat4-perspective fovy aspect near far)
   (define f (/ 1.0 (tan (* 0.5 (/ (acos -1.0) 180.0) fovy))))
   (define nf (/ (+ near far) (- near far)))
   (define n2f (/ (* 2.0 near far) (- near far)))
-  (f64vector (/ f aspect) 0.0 0.0 0.0
+  (mat4 (/ f aspect) 0.0 0.0 0.0
              0.0 f 0.0 0.0
              0.0 0.0 nf -1.0
              0.0 0.0 n2f 0.0))
 
 ;; 视图矩阵 lookAt：eye=(ex,ey,ez) 看向 center=(cx,cy,cz)，up=(ux,uy,uz)。
 ;; 用 f（前）、s（右）、u（上）三个正交基向量 + 平移拼成"把世界搬到相机面前"的矩阵。
-(define (m4-look-at ex ey ez cx cy cz ux uy uz)
+(define (mat4-look-at ex ey ez cx cy cz ux uy uz)
   (define fx (- cx ex)) (define fy (- cy ey)) (define fz (- cz ez))
   (define fl (sqrt (+ (* fx fx) (* fy fy) (* fz fz))))
   (define fxx (/ fx fl)) (define fyy (/ fy fl)) (define fzz (/ fz fl))
@@ -164,7 +164,7 @@
   (define uxx (- (* syy fzz) (* szz fyy)))
   (define uyy (- (* szz fxx) (* sxx fzz)))
   (define uzz (- (* sxx fyy) (* syy fxx)))
-  (f64vector sxx uxx (- fxx) 0.0
+  (mat4 sxx uxx (- fxx) 0.0
              syy uyy (- fyy) 0.0
              szz uzz (- fzz) 0.0
              (- (+ (* sxx ex) (* syy ey) (* szz ez)))
@@ -295,6 +295,38 @@
                   (list b (+ b 1) (+ b 2)  b  (+ b 2) (+ b 3))))))
 
 ;; =========================================================
+;; vec3 数学：GLSL 的 sub / dot / cross / normalize 的 CPU 版。
+;; 作用在 vec3（f32vector）上，返回 vec3 或数。
+;; =========================================================
+(define (vec3-sub a b)
+  (vec3 (- (f32vector-ref a 0) (f32vector-ref b 0))
+        (- (f32vector-ref a 1) (f32vector-ref b 1))
+        (- (f32vector-ref a 2) (f32vector-ref b 2))))
+
+(define (vec3-dot a b)
+  (+ (* (f32vector-ref a 0) (f32vector-ref b 0))
+     (* (f32vector-ref a 1) (f32vector-ref b 1))
+     (* (f32vector-ref a 2) (f32vector-ref b 2))))
+
+(define (vec3-cross a b)
+  (vec3 (- (* (f32vector-ref a 1) (f32vector-ref b 2))
+           (* (f32vector-ref a 2) (f32vector-ref b 1)))
+        (- (* (f32vector-ref a 2) (f32vector-ref b 0))
+           (* (f32vector-ref a 0) (f32vector-ref b 2)))
+        (- (* (f32vector-ref a 0) (f32vector-ref b 1))
+           (* (f32vector-ref a 1) (f32vector-ref b 0)))))
+
+(define (vec3-length a) (sqrt (vec3-dot a a)))
+
+(define (vec3-normalize a)
+  (define l (vec3-length a))
+  (if (zero? l)
+      (vec3 0.0 1.0 0.0)
+      (vec3 (/ (f32vector-ref a 0) l)
+            (/ (f32vector-ref a 1) l)
+            (/ (f32vector-ref a 2) l))))
+
+;; =========================================================
 ;; OBJ（Wavefront）模型解析 —— 文本模型文件 → 顶点/索引数组
 ;; =========================================================
 ;; 17 课主题：GL 不认"文件"，只认顶点数组。OBJ 是最常见的文本模型格式，
@@ -328,9 +360,9 @@
       (define toks (string-split l))
       (when (pair? toks)
         (case (car toks)
-          [("v")  (set! vs  (cons (map string->number (cdr toks)) vs))]
-          [("vt") (set! vts (cons (map string->number (cdr toks)) vts))]
-          [("vn") (set! vns (cons (map string->number (cdr toks)) vns))]
+          [("v")  (set! vs  (cons (map (lambda (x) (exact->inexact (string->number x))) (cdr toks)) vs))]
+          [("vt") (set! vts (cons (map (lambda (x) (exact->inexact (string->number x))) (cdr toks)) vts))]
+          [("vn") (set! vns (cons (map (lambda (x) (exact->inexact (string->number x))) (cdr toks)) vns))]
           [("f")  (set! fs  (cons (cdr toks) fs))]
           [else #f]))
       (loop (read-line ip 'any))))
@@ -356,35 +388,27 @@
   (define sc (if (zero? maxdim) 1.0 (/ 1.6 maxdim)))
 
   ;; ---- ③ 编号 → 局部坐标/uv（本课 GL 用的值）----
-  (define (ploc i)                     ; 顶点编号(1起始)
+  (define (ploc i)                     ; 顶点编号(1起始) → vec3
     (define q (vector-ref vtab (sub1 i)))
-    (list (* (- (car q) cx) sc) (* (- (cadr q) cy) sc) (* (- (caddr q) cz) sc)))
-  (define (uvl i)                      ; vt 编号；#f/缺 vt → (0,0)
+    (vec3 (* (- (car q) cx) sc) (* (- (cadr q) cy) sc) (* (- (caddr q) cz) sc)))
+  (define (uvl i)                      ; vt 编号 → vec2；#f/缺 vt → (0,0)
     (if (and i (pair? vts))
         (let ([q (vector-ref vttab (sub1 i))])
-          (list (car q) (cadr q)))
-        '(0.0 0.0)))
-  (define (nloc i) (vector-ref vntab (sub1 i)))
-  (define (cross a b)                  ; a×b
-    (list (- (* (cadr a) (caddr b)) (* (caddr a) (cadr b)))
-          (- (* (caddr a) (car b)) (* (car a) (caddr b)))
-          (- (* (car a) (cadr b)) (* (cadr a) (car b)))))
-  (define (sub a b) (list (- (car a) (car b)) (- (cadr a) (cadr b)) (- (caddr a) (caddr b))))
-  (define (norm a)
-    (define l (sqrt (+ (* (car a) (car a)) (* (cadr a) (cadr a)) (* (caddr a) (caddr a)))))
-    (if (zero? l) '(0.0 1.0 0.0) (list (/ (car a) l) (/ (cadr a) l) (/ (caddr a) l))))
+          (vec2 (car q) (cadr q)))
+        (vec2 0.0 0.0)))
+  (define (nloc i)                     ; vn 编号 → vec3
+    (define q (vector-ref vntab (sub1 i)))
+    (vec3 (car q) (cadr q) (caddr q)))
 
   ;; ---- ④ 面 → 角点流（扇形三角化 + 去重）----
   (define lookup (make-hash))          ; 角点键 → 顶点下标
-  (define entries '())                 ; (下标 . 8-float) 暂存
+  (define entries '())                 ; (下标 . (pos nrm uv)) 暂存
   (define total 0)
   (define any-flat? #f)
   (define (ensure! key pos nrm uv)
     (define hit (hash-ref lookup key #f))
     (cond [hit hit]
-          [else (set! entries (cons (cons total (list (car pos) (cadr pos) (caddr pos)
-                                                      (car nrm) (cadr nrm) (caddr nrm)
-                                                      (car uv) (cadr uv))) entries))
+          [else (set! entries (cons (cons total (list pos nrm uv)) entries))
                 (hash-set! lookup key total)
                 (set! total (add1 total))
                 (sub1 total)]))
@@ -405,7 +429,7 @@
       (define p0 (ploc (car (list-ref corners 0))))
       (define p1 (ploc (car (list-ref corners 1))))
       (define p2 (ploc (car (list-ref corners 2))))
-      (define face-n (norm (cross (sub p1 p0) (sub p2 p0))))   ; 面法线
+      (define face-n (vec3-normalize (vec3-cross (vec3-sub p1 p0) (vec3-sub p2 p0))))   ; 面法线
       (define (emit c)
         (define vn-idx (caddr c))
         (define key (if vn-idx
@@ -425,7 +449,7 @@
   (define placed (make-vector total #f))
   (for ([e entries]) (vector-set! placed (car e) (cdr e)))
   (define ordered (for/list ([id (in-range total)]) (vector-ref placed id)))
-  (define verts (apply f32vector (map exact->inexact (apply append ordered))))
+  (define verts (apply concat-vecs (apply append ordered)))
   (define idx   (apply u32vector (reverse idxl)))
   (define tris  (quotient (length idxl) 3))
   (define summary

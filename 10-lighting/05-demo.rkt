@@ -56,11 +56,11 @@
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (define-values (w h) (send canvas get-gl-client-size))
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))
-  ;; 相机缓缓环绕
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))
+  ;; 相机缓缓环绕（相机位置 = look-at 的 eye，光源的 view 向量共用它）
   (define cam-rad (* (/ PI 180.0) (* t 18.0)))
-  (define V (m4-look-at (* 8.0 (sin cam-rad)) 3.0 (* 8.0 (cos cam-rad))
-                        0.0 0.0 0.0  0.0 1.0 0.0))
+  (define ex (* 8.0 (sin cam-rad))) (define ey 3.0) (define ez (* 8.0 (cos cam-rad)))
+  (define V (mat4-look-at ex ey ez 0.0 0.0 0.0  0.0 1.0 0.0))
   ;; 点光源绕圈
   (define la (* (/ PI 180.0) (* t 70.0)))
 
@@ -68,26 +68,26 @@
   (glClear (bitwise-ior GL_COLOR_BUFFER_BIT GL_DEPTH_BUFFER_BIT))
   (glUseProgram prog)
   ;; 每帧上传的光照参数
-  (glUniform3f loc-view (f64vector-ref V 12) (f64vector-ref V 13) (f64vector-ref V 14))
+  (glUniform3f loc-view ex ey ez)
   (glUniform3f loc-lcol 1.0 0.96 0.85)
   (glUniform3f loc-lpos (* 4.5 (cos la)) 3.2 (* 4.5 (sin la)))
 
   (define (draw-cube m r g b)
-    (glUniformMatrix4fv loc-model 1 #f (mat4 m))
-    (glUniformMatrix4fv loc-mvp   1 #f (mat4 (m4-mult (m4-mult P V) m)))
+    (glUniformMatrix4fv loc-model 1 #f m)
+    (glUniformMatrix4fv loc-mvp   1 #f (mat4-mult (mat4-mult P V) m))
     (glUniform3f loc-albedo r g b)
     (glBindVertexArray vao)
     (glDrawElements GL_TRIANGLES 36 GL_UNSIGNED_SHORT 0))
 
   ;; 中央翻滚的灰白立方体（缩到 0.7）
-  (draw-cube (m4-mult (m4-mult (m4-rot-y (* t 50.0)) (m4-rot-x (* t 40.0)))
-                      (m4-scale 0.7 0.7 0.7))
+  (draw-cube (mat4-mult (mat4-mult (mat4-rot-y (* t 50.0)) (mat4-rot-x (* t 40.0)))
+                      (mat4-scale 0.7 0.7 0.7))
              0.82 0.84 0.90)
   ;; 三颗彩色小立方体绕行
   (for ([k (in-range 3)])
     (define a (* (/ PI 180.0) (+ (* k 120.0) (* t 90.0))))
-    (define m (m4-mult (m4-translate (* 2.7 (cos a)) 0.6 (* 2.7 (sin a)))
-                       (m4-mult (m4-rot-y (* t -90.0)) (m4-scale 0.45 0.45 0.45))))
+    (define m (mat4-mult (mat4-translate (* 2.7 (cos a)) 0.6 (* 2.7 (sin a)))
+                       (mat4-mult (mat4-rot-y (* t -90.0)) (mat4-scale 0.45 0.45 0.45))))
     (draw-cube m (list-ref '(0.95 0.3 0.3) k)
                (list-ref '(0.3 0.9 0.4) k)
                (list-ref '(0.3 0.6 0.95) k))))

@@ -57,8 +57,8 @@
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (define-values (w h) (send canvas get-gl-client-size))
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))
-  (define V (m4-look-at 0.0 0.0 5.0  0.0 0.0 0.0  0.0 1.0 0.0))
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))
+  (define V (mat4-look-at 0.0 0.0 5.0  0.0 0.0 0.0  0.0 1.0 0.0))
 
   (if (unbox blend-on?)
       (begin (glEnable GL_BLEND)
@@ -73,16 +73,16 @@
   ;; 第一遍：不透明立方体（正常画，写深度）
   (glUniform1f loc-alpha 1.0)
   (glUniform3f loc-tint 0.70 0.72 0.80)
-  (define M (m4-mult (m4-rot-y (* t 40.0)) (m4-rot-x (* t 30.0))))
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) M)))
+  (define M (mat4-mult (mat4-rot-y (* t 40.0)) (mat4-rot-x (* t 30.0))))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) M))
   (glDrawElements GL_TRIANGLES 36 GL_UNSIGNED_SHORT 0)
 
   ;; 第二遍：半透明玻璃板（单位立方体把 z 压扁成薄板，挡在立方体前）
   (glUniform1f loc-alpha 0.35)
   (glUniform3f loc-tint 0.30 0.90 0.60)
-  (define G (m4-mult (m4-translate 0.0 0.0 1.5)
-                     (m4-scale 1.2 1.2 0.02)))
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) G)))
+  (define G (mat4-mult (mat4-translate 0.0 0.0 1.5)
+                     (mat4-scale 1.2 1.2 0.02)))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) G))
   (glDrawElements GL_TRIANGLES 36 GL_UNSIGNED_SHORT 0))
 
 (define-values (frame canvas)

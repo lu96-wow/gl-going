@@ -42,8 +42,8 @@
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (define-values (w h) (send canvas get-gl-client-size))
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define V (m4-translate 0.0 0.0 -6.0))              ; 假相机
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))   ; 透视
+  (define V (mat4-translate 0.0 0.0 -6.0))              ; 假相机
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))   ; 透视
 
   (glClearColor 0.07 0.08 0.14 1.0)
   (glClear (bitwise-ior GL_COLOR_BUFFER_BIT GL_DEPTH_BUFFER_BIT))
@@ -52,17 +52,17 @@
 
   ;; 画一颗立方体：给定模型矩阵 M
   (define (cube-at M)
-    (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) M)))
+    (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) M))
     (glDrawElements GL_TRIANGLES 36 GL_UNSIGNED_SHORT 0))
 
   ;; 三颗并排：x 拉开 2.6，z 依次 -1.4 / -0.2 / +1.0（前后拉开），各自翻滚
   (for ([k (in-range 3)])
     (define x (* 2.6 (- k 1)))
     (define z (- 1.0 (* 1.2 k)))
-    (define M (m4-mult (m4-translate x 0.0 z)
-                       (m4-mult (m4-mult (m4-rot-y (* t (+ 40.0 (* k 30.0))))
-                                         (m4-rot-x (* t 30.0)))
-                                (m4-scale 0.6 0.6 0.6))))
+    (define M (mat4-mult (mat4-translate x 0.0 z)
+                       (mat4-mult (mat4-mult (mat4-rot-y (* t (+ 40.0 (* k 30.0))))
+                                         (mat4-rot-x (* t 30.0)))
+                                (mat4-scale 0.6 0.6 0.6))))
     (cube-at M)))
 
 (define-values (frame canvas)

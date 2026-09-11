@@ -46,24 +46,24 @@
           (set! FragColor (vec4 uColor 1.0)))))
 
 ;; 平移 / 旋转 / 缩放（前两步裸写过的，本步一起用）
-(define (m4-translate tx ty)
-  (f64vector 1.0 0.0 0.0 0.0   0.0 1.0 0.0 0.0   0.0 0.0 1.0 0.0   tx ty 0.0 1.0))
-(define (m4-rot-z deg)
+(define (mat4-translate tx ty)
+  (mat4 1.0 0.0 0.0 0.0   0.0 1.0 0.0 0.0   0.0 0.0 1.0 0.0   tx ty 0.0 1.0))
+(define (mat4-rot-z deg)
   (define r (* (/ PI 180.0) deg))
   (define c (cos r)) (define s (sin r))
-  (f64vector c s 0.0 0.0   (- s) c 0.0 0.0   0.0 0.0 1.0 0.0   0.0 0.0 0.0 1.0))
-(define (m4-scale sx sy)
-  (f64vector sx 0.0 0.0 0.0   0.0 sy 0.0 0.0   0.0 0.0 1.0 0.0   0.0 0.0 0.0 1.0))
+  (mat4 c s 0.0 0.0   (- s) c 0.0 0.0   0.0 0.0 1.0 0.0   0.0 0.0 0.0 1.0))
+(define (mat4-scale sx sy)
+  (mat4 sx 0.0 0.0 0.0   0.0 sy 0.0 0.0   0.0 0.0 1.0 0.0   0.0 0.0 0.0 1.0))
 
 ;; 矩阵乘法 A·B（裸写，本步主角）。列主序：元素 (r 行, c 列) 存下标 c*4+r。
 ;; R[c][r] = Σ_k A[k][r] · B[c][k]（即 A 的第 r 行 × B 的第 c 列）。
-(define (m4-mult A B)
-  (define R (make-f64vector 16 0.0))
+(define (mat4-mult A B)
+  (define R (make-f32vector 16 0.0))
   (for* ([c (in-range 4)] [r (in-range 4)] [k (in-range 4)])
-    (f64vector-set! R (+ (* 4 c) r)
-                    (+ (f64vector-ref R (+ (* 4 c) r))
-                       (* (f64vector-ref A (+ (* 4 k) r))
-                          (f64vector-ref B (+ (* 4 c) k))))))
+    (f32vector-set! R (+ (* 4 c) r)
+                    (+ (f32vector-ref R (+ (* 4 c) r))
+                       (* (f32vector-ref A (+ (* 4 k) r))
+                          (f32vector-ref B (+ (* 4 c) k))))))
   R)
 
 (define verts (vec (vec2 -0.5 -0.5) (vec2 0.5 -0.5) (vec2 0.5 0.5) (vec2 -0.5 0.5)))
@@ -71,7 +71,7 @@
 
 ;; 画一个方块：给定合成矩阵 M 和颜色
 (define (draw-square M r g b)
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 M))
+  (glUniformMatrix4fv loc-mvp 1 #f M)
   (glUniform3f loc-color r g b)
   (glDrawElements GL_TRIANGLES 6 GL_UNSIGNED_SHORT 0))
 
@@ -84,14 +84,14 @@
   (glBindVertexArray vao)
 
   ;; 左：T·R·S（先缩放旋转再平移）→ 绕自己中心转
-  (define T-L (m4-translate -0.5 0.0))
-  (define R   (m4-rot-z ang))
-  (define S   (m4-scale 0.5 0.5))
-  (draw-square (m4-mult T-L (m4-mult R S)) 0.30 0.65 0.95)
+  (define T-L (mat4-translate -0.5 0.0))
+  (define R   (mat4-rot-z ang))
+  (define S   (mat4-scale 0.5 0.5))
+  (draw-square (mat4-mult T-L (mat4-mult R S)) 0.30 0.65 0.95)
 
   ;; 右：R·T·S（旋转在平移之后）→ 绕原点甩出去
-  (define T-R (m4-translate 0.5 0.0))
-  (draw-square (m4-mult R (m4-mult T-R S)) 0.95 0.70 0.30))
+  (define T-R (mat4-translate 0.5 0.0))
+  (draw-square (mat4-mult R (mat4-mult T-R S)) 0.95 0.70 0.30))
 
 (define-values (frame canvas)
   (make-window #:title "06-03 顺序（T·R·S vs R·T·S）" #:width 400 #:height 400 #:draw draw))

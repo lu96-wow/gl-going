@@ -9,10 +9,10 @@
 本文件夹的 lib 采用"每课一份复制"：
 
 - `lib-gui.rkt` —— 从 07 复制，第 3 步扩展：make-window 加 `#:on-char` / `#:on-event`
-- `lib.rkt` —— 从 07 复制，第 1 步裸写 m4-look-at，第 4 步收进 lib（连同网格地面数据）
+- `lib.rkt` —— 从 07 复制，第 1 步裸写 mat4-look-at，第 4 步收进 lib（连同网格地面数据）
 
-1. `01-lookat.rkt` **视图矩阵 m4-look-at**：f/s/u 三个基向量，固定相机看原点 + 网格地面
+1. `01-lookat.rkt` **视图矩阵 mat4-look-at**：f/s/u 三个基向量，固定相机看原点 + 网格地面
 2. `02-orbit.rkt`  **球坐标轨道相机**：yaw/pitch/dist → 眼睛位置，相机自动绕场景转
 3. `03-input.rkt`  **鼠标交互**：左键拖 = 环绕，滚轮 = 拉近拉远（make-window 加 on-event/on-char）
-4. `04-lib.rkt`    **收进 lib**：m4-look-at + 网格地面（节奏步）
+4. `04-lib.rkt`    **收进 lib**：mat4-look-at + 网格地面（节奏步）
 5. `05-demo.rkt`   **综合**（无新语法）：网格 + 中央立方体 + 散落立方体 + 完整轨道相机 + R 复位

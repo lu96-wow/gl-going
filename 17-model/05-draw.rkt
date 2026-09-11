@@ -94,15 +94,15 @@
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (define-values (w h) (send canvas get-gl-client-size))
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))
-  (define V (m4-translate 0.0 0.0 -3.0))      ; 相机往后退 3 格
-  (define M (m4-rot-y (* t 40.0)))            ; 模型自转
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))
+  (define V (mat4-translate 0.0 0.0 -3.0))      ; 相机往后退 3 格
+  (define M (mat4-rot-y (* t 40.0)))            ; 模型自转
 
   (glClearColor 0.07 0.08 0.14 1.0)
   (glClear (bitwise-ior GL_COLOR_BUFFER_BIT GL_DEPTH_BUFFER_BIT))
   (glUseProgram prog)
-  (glUniformMatrix4fv loc-model 1 #f (mat4 M))
-  (glUniformMatrix4fv loc-mvp   1 #f (mat4 (m4-mult (m4-mult P V) M)))
+  (glUniformMatrix4fv loc-model 1 #f M)
+  (glUniformMatrix4fv loc-mvp   1 #f (mat4-mult (mat4-mult P V) M))
   (glUniform3f loc-albedo 0.82 0.84 0.88)
 
   ;; ③ 绘制：切模型只换"绑哪个 VAO、画几个索引"

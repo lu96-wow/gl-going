@@ -45,7 +45,7 @@
           (set! FragColor (vec4 vColor 1.0)))))
 
 ;; 视图矩阵（同前两步，下一步收进 lib）
-(define (m4-look-at ex ey ez cx cy cz ux uy uz)
+(define (mat4-look-at ex ey ez cx cy cz ux uy uz)
   (define fx (- cx ex)) (define fy (- cy ey)) (define fz (- cz ez))
   (define fl (sqrt (+ (* fx fx) (* fy fy) (* fz fz))))
   (define fxx (/ fx fl)) (define fyy (/ fy fl)) (define fzz (/ fz fl))
@@ -57,7 +57,7 @@
   (define uxx (- (* syy fzz) (* szz fyy)))
   (define uyy (- (* szz fxx) (* sxx fzz)))
   (define uzz (- (* sxx fyy) (* syy fxx)))
-  (f64vector sxx uxx (- fxx) 0.0
+  (mat4 sxx uxx (- fxx) 0.0
              syy uyy (- fyy) 0.0
              szz uzz (- fzz) 0.0
              (- (+ (* sxx ex) (* syy ey) (* szz ez)))
@@ -119,7 +119,7 @@
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (define-values (w h) (send canvas get-gl-client-size))
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))
 
   ;; 球坐标 → 眼睛 → V（yaw/pitch/dist 由鼠标改）
   (define ph (* (/ PI 180.0) (unbox pitch)))
@@ -127,20 +127,20 @@
   (define ex (* (unbox dist) (cos ph) (sin ya)))
   (define ey (* (unbox dist) (sin ph)))
   (define ez (* (unbox dist) (cos ph) (cos ya)))
-  (define V (m4-look-at ex ey ez  0.0 0.0 0.0  0.0 1.0 0.0))
+  (define V (mat4-look-at ex ey ez  0.0 0.0 0.0  0.0 1.0 0.0))
 
   (glClearColor 0.07 0.08 0.14 1.0)
   (glClear (bitwise-ior GL_COLOR_BUFFER_BIT GL_DEPTH_BUFFER_BIT))
   (glUseProgram prog)
 
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult P V)))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult P V))
   (glBindVertexArray vao-grid)
   (glDrawArrays GL_LINES 0 grid-count)
 
-  (define M (m4-mult (m4-translate 0.0 1.0 0.0)
-                     (m4-mult (m4-mult (m4-rot-y (* t 60.0)) (m4-rot-x (* t 40.0)))
-                              (m4-scale 0.8 0.8 0.8))))
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) M)))
+  (define M (mat4-mult (mat4-translate 0.0 1.0 0.0)
+                     (mat4-mult (mat4-mult (mat4-rot-y (* t 60.0)) (mat4-rot-x (* t 40.0)))
+                              (mat4-scale 0.8 0.8 0.8))))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) M))
   (glBindVertexArray vao-cube)
   (glDrawElements GL_TRIANGLES 36 GL_UNSIGNED_SHORT 0))
 

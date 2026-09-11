@@ -55,8 +55,8 @@
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (define-values (w h) (send canvas get-gl-client-size))
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))
-  (define V (m4-look-at 0.0 0.0 5.0  0.0 0.0 0.0  0.0 1.0 0.0))
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))
+  (define V (mat4-look-at 0.0 0.0 5.0  0.0 0.0 0.0  0.0 1.0 0.0))
 
   (glEnable GL_BLEND)
   (glBlendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA)
@@ -69,8 +69,8 @@
   (glDepthMask #t)
   (glUniform1f loc-alpha 1.0)
   (glUniform3f loc-tint 0.70 0.72 0.80)
-  (define M (m4-mult (m4-translate 0.0 0.0 -2.0) (m4-scale 0.8 0.8 0.8)))
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) M)))
+  (define M (mat4-mult (mat4-translate 0.0 0.0 -2.0) (mat4-scale 0.8 0.8 0.8)))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) M))
   (glDrawElements GL_TRIANGLES 36 GL_UNSIGNED_SHORT 0)
 
   ;; 透明玻璃：★深度写入按 D 切换
@@ -78,8 +78,8 @@
   (glUniform1f loc-alpha 0.5)
   (define (glass tint z sz)
     (glUniform3f loc-tint (list-ref tint 0) (list-ref tint 1) (list-ref tint 2))
-    (define G (m4-mult (m4-translate 0.0 0.0 z) (m4-scale sz sz 0.02)))
-    (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) G)))
+    (define G (mat4-mult (mat4-translate 0.0 0.0 z) (mat4-scale sz sz 0.02)))
+    (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) G))
     (glDrawElements GL_TRIANGLES 36 GL_UNSIGNED_SHORT 0))
   ;; 先画近的蓝玻璃，再画远的红玻璃（暴露深度写入坑）
   (glass '(0.30 0.50 0.95)  1.0 1.2)   ; 近

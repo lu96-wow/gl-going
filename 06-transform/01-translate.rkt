@@ -22,7 +22,7 @@
 ;;
 ;; ★矩阵在内存里的顺序（列主序）：glUniformMatrix4fv 按"列"读 16 个 float。
 ;;   本课的矩阵也按列存（第 0 列 4 个数、第 1 列 4 个数……）。矩阵的第 4 列
-;;   是 (tx, ty, 0, 1)，所以 f64vector 的第 12、13 号位置放 tx、ty。
+;;   是 (tx, ty, 0, 1)，所以 mat4 的第 12、13 号位置放 tx、ty。
 ;;
 ;; 本步视觉：单位方块（中心在原点、边长 1）随时间来回平移——一条 sin 横着
 ;;   摆、一条 cos 竖着摆，合成椭圆轨迹。
@@ -50,8 +50,8 @@
 
 ;; 平移矩阵（裸写，本步的主角）：4×4 单位阵，第 4 列放 (tx, ty, 0, 1)。
 ;; 列主序存储：第 c 列的第 r 个元素在下标 c*4+r。
-(define (m4-translate tx ty)
-  (f64vector 1.0 0.0 0.0 0.0    ; 第 0 列
+(define (mat4-translate tx ty)
+  (mat4 1.0 0.0 0.0 0.0    ; 第 0 列
              0.0 1.0 0.0 0.0    ; 第 1 列
              0.0 0.0 1.0 0.0    ; 第 2 列
              tx  ty  0.0 1.0))  ; 第 3 列 = (tx, ty, 0, 1)
@@ -65,12 +65,12 @@
 (define (draw)
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   ;; 平移量随时间摆：横着 sin、竖着 cos → 椭圆轨迹
-  (define M (m4-translate (* 0.5 (sin t)) (* 0.3 (cos (* 1.3 t)))))
+  (define M (mat4-translate (* 0.5 (sin t)) (* 0.3 (cos (* 1.3 t)))))
   (glClearColor 0.07 0.08 0.14 1.0)
   (glClear GL_COLOR_BUFFER_BIT)
   (glUseProgram prog)
-  ;; ★上传矩阵：mat4 把 f64 的 16 个数转成 f32（GL 要 float）
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 M))
+  ;; ★上传矩阵：mat4 已经是 mat4（f32vector），直接上传（GL 要 float）
+  (glUniformMatrix4fv loc-mvp 1 #f M)
   (glUniform3f loc-color 0.30 0.65 0.95)
   (glBindVertexArray vao)
   (glDrawElements GL_TRIANGLES 6 GL_UNSIGNED_SHORT 0))

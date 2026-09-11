@@ -21,7 +21,7 @@
 ;;   （raylib 的 LoadModel 也是先纯 CPU 解析出 Mesh，rlLoadMesh 才碰 GPU。）
 ;; =========================================================
 
-(require "lib.rkt")              ; obj-load-file + obj-mesh-* + (glsl ...) + m4-*…
+(require "lib.rkt")              ; obj-load-file + obj-mesh-* + (glsl ...) + mat4-*…
 (require racket/runtime-path)
 
 (define-runtime-path cube-obj "assets/cube.obj")

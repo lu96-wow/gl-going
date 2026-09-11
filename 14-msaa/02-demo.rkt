@@ -84,8 +84,8 @@
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (define-values (w h) (send canvas get-gl-client-size))
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))
-  (define V (m4-translate 0.0 0.0 (- (unbox dist))))
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))
+  (define V (mat4-translate 0.0 0.0 (- (unbox dist))))
   (define ang (* t 25.0))
 
   (glClearColor 0.02 0.02 0.05 1.0)
@@ -94,7 +94,7 @@
   ;; 三片 blade 绕 z 转，夹角各 60°
   (define (blade vao deg)
     (glBindVertexArray vao)
-    (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) (m4-rot-z (+ ang deg)))))
+    (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) (mat4-rot-z (+ ang deg))))
     (glDrawArrays GL_TRIANGLES 0 3))
   (blade vao-blade1 0.0)
   (blade vao-blade2 60.0)
@@ -102,7 +102,7 @@
   ;; 两条静止 1px 细线（浅角度 → 常驻"台阶"）
   (glLineWidth 1.0)
   (glBindVertexArray vao-line1)
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult P V)))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult P V))
   (glDrawArrays GL_LINES 0 2)
   (glBindVertexArray vao-line2)
   (glDrawArrays GL_LINES 0 2))

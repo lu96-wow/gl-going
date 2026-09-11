@@ -148,12 +148,18 @@
        (define u1 (list-ref g 2)) (define v1 (list-ref g 3))
        (define wpx (* (list-ref g 4) scale))
        (define x1 (+ px wpx))
+       ;; 一个字符 = 2 个三角形（6 顶点），每顶点 = 位置(vec2) + uv(vec2)
        (set! parts (append parts
-                           (list px y0 u0 v0   x1 y0 u1 v0   x1 y1 u1 v1
-                                 px y0 u0 v0   x1 y1 u1 v1   px y1 u0 v1)))
+                           (list (concat-vecs (vec2 px y0) (vec2 u0 v0)
+                                              (vec2 x1 y0) (vec2 u1 v0)
+                                              (vec2 x1 y1) (vec2 u1 v1)
+                                              (vec2 px y0) (vec2 u0 v0)
+                                              (vec2 x1 y1) (vec2 u1 v1)
+                                              (vec2 px y1) (vec2 u0 v1)))))
        (set! px x1)]
       [else (set! px (+ px (* scale (list-ref (hash-ref glyphs #\space) 4))))]))
-  (values (apply f32vector parts) (quotient (length parts) 4)))
+  (define data (apply concat-vecs parts))
+  (values data (quotient (f32vector-length data) 4)))
 
 (define (draw-text s x by scale color glyphs h0 asc)
   (glUniform4f loc-color (list-ref color 0) (list-ref color 1)
@@ -177,7 +183,7 @@
   (glBindTexture GL_TEXTURE_2D tex-atlas)
   (glUniform1i loc-font 0)
   (glUniformMatrix4fv loc-proj 1 #f
-                      (mat4 (m4-ortho 0.0 (exact->inexact w) (exact->inexact h) 0.0 -1.0 1.0)))
+                       (mat4-ortho 0.0 (exact->inexact w) (exact->inexact h) 0.0 -1.0 1.0))
   (draw-text "GLYPH ATLAS TEXT" 24.0 80.0 0.6 '(0.95 0.85 0.30 1.0) glyphs font-h0 font-asc)
   (draw-text "中英文混排 latin + CJK" 26.0 150.0 0.5 '(0.75 0.80 0.95 1.0) glyphs font-h0 font-asc)
   (draw-text "你好 字帖支持中文" 26.0 220.0 0.5 '(0.45 0.95 0.90 1.0) glyphs font-h0 font-asc)

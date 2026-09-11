@@ -1,12 +1,12 @@
 #lang racket/base
 ;; =========================================================
-;; 08-camera/01-lookat.rkt —— 第一步：视图矩阵 m4-look-at
+;; 08-camera/01-lookat.rkt —— 第一步：视图矩阵 mat4-look-at
 ;; 运行：racket 08-camera/01-lookat.rkt    点 X = 退出
 ;; =========================================================
 ;; 07 课的相机是写死的"把世界往后推 6 格"。本步换真正的相机：视图矩阵。
 ;;
 ;; 本步新增（2 个）：
-;;   ① m4-look-at —— 由"相机位置 + 看向目标 + 上方向"生成视图矩阵 V
+;;   ① mat4-look-at —— 由"相机位置 + 看向目标 + 上方向"生成视图矩阵 V
 ;;   ② 网格地面 —— GL_LINES 画 XZ 平面，让相机朝向一眼可见
 ;;
 ;; ★核心心智：相机不动，世界动。想从"相机在 (5,3,5)、看向原点"的视角看世界，
@@ -44,7 +44,7 @@
           (set! FragColor (vec4 vColor 1.0)))))
 
 ;; 视图矩阵（裸写，本步主角）：eye=(ex,ey,ez)，center=(cx,cy,cz)，up=(ux,uy,uz)
-(define (m4-look-at ex ey ez cx cy cz ux uy uz)
+(define (mat4-look-at ex ey ez cx cy cz ux uy uz)
   ;; f = normalize(center - eye) —— 相机看的方向（前）
   (define fx (- cx ex)) (define fy (- cy ey)) (define fz (- cz ez))
   (define fl (sqrt (+ (* fx fx) (* fy fy) (* fz fz))))
@@ -59,7 +59,7 @@
   (define uxx (- (* syy fzz) (* szz fyy)))
   (define uyy (- (* szz fxx) (* sxx fzz)))
   (define uzz (- (* sxx fyy) (* syy fxx)))
-  (f64vector sxx uxx (- fxx) 0.0
+  (mat4 sxx uxx (- fxx) 0.0
              syy uyy (- fyy) 0.0
              szz uzz (- fzz) 0.0
              (- (+ (* sxx ex) (* syy ey) (* szz ez)))
@@ -84,24 +84,24 @@
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (define-values (w h) (send canvas get-gl-client-size))
   (define aspect (/ (exact->inexact w) (exact->inexact h)))
-  (define P (m4-perspective 45.0 aspect 0.1 100.0))
+  (define P (mat4-perspective 45.0 aspect 0.1 100.0))
   ;; ★固定相机：站在 (5,3,5)，看向原点，上方向 (0,1,0)
-  (define V (m4-look-at 5.0 3.0 5.0  0.0 0.0 0.0  0.0 1.0 0.0))
+  (define V (mat4-look-at 5.0 3.0 5.0  0.0 0.0 0.0  0.0 1.0 0.0))
 
   (glClearColor 0.07 0.08 0.14 1.0)
   (glClear (bitwise-ior GL_COLOR_BUFFER_BIT GL_DEPTH_BUFFER_BIT))
   (glUseProgram prog)
 
   ;; 地面网格（模型矩阵 = 单位阵，直接 P·V）
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult P V)))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult P V))
   (glBindVertexArray vao-grid)
   (glDrawArrays GL_LINES 0 grid-count)
 
   ;; 中央翻滚立方体
-  (define M (m4-mult (m4-translate 0.0 1.0 0.0)
-                     (m4-mult (m4-mult (m4-rot-y (* t 60.0)) (m4-rot-x (* t 40.0)))
-                              (m4-scale 0.8 0.8 0.8))))
-  (glUniformMatrix4fv loc-mvp 1 #f (mat4 (m4-mult (m4-mult P V) M)))
+  (define M (mat4-mult (mat4-translate 0.0 1.0 0.0)
+                     (mat4-mult (mat4-mult (mat4-rot-y (* t 60.0)) (mat4-rot-x (* t 40.0)))
+                              (mat4-scale 0.8 0.8 0.8))))
+  (glUniformMatrix4fv loc-mvp 1 #f (mat4-mult (mat4-mult P V) M))
   (glBindVertexArray vao-cube)
   (glDrawElements GL_TRIANGLES 36 GL_UNSIGNED_SHORT 0))
 
