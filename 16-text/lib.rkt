@@ -21,7 +21,7 @@
 
 (provide build-program
          mat4-identity mat4-translate mat4-rot-x mat4-rot-y mat4-rot-z
-         mat4-scale mat4-mult mat4*vec4 mat4-ortho mat4-perspective mat4-look-at
+         mat4-scale mat4-mult mat4-mult-vec4 mat4-ortho mat4-perspective mat4-look-at
          cube-verts cube-idx grid-verts
          load-tex cube-uv-verts cube-uv-idx
          cube-normal-verts cube-normal-idx
@@ -127,7 +127,7 @@
   R)
 
 ;; mat4 × vec4（GLSL 的 (m * v)；列主序 m）
-(define (mat4*vec4 m v)
+(define (mat4-mult-vec4 m v)
   (vec4 (+ (* (f32vector-ref m 0)  (f32vector-ref v 0))
            (* (f32vector-ref m 4)  (f32vector-ref v 1))
            (* (f32vector-ref m 8)  (f32vector-ref v 2))

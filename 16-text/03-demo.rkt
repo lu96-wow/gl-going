@@ -171,7 +171,7 @@
 
 ;; 3D 点 (x,y,z) 经 MVP 投影到屏幕像素（GLSL 里就是 (mvp * vec4(x y z 1.0)) 的透视除法）
 (define (project-to-screen m px py pz gw gh)
-  (define clip (mat4*vec4 m (vec4 px py pz 1.0)))
+  (define clip (mat4-mult-vec4 m (vec4 px py pz 1.0)))
   (define w (f32vector-ref clip 3))
   (if (<= w 0.0) #f
       (let ([cx (/ (f32vector-ref clip 0) w)]
