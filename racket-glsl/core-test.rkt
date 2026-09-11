@@ -70,7 +70,7 @@
 (check-equal? (glsl-fn "sq" "float" (list (glsl-param '() "float" "x"))
                        (glsl-return (glsl-bin "*" "x" "x")))
               "float sq(float x) { return (x * x); }")
-(check-equal? (glsl-struct "Light" (glsl-field-decl "vec3" "pos") (glsl-field-decl "float" "i"))
+(check-equal? (glsl-struct-decl "Light" (glsl-field-decl "vec3" "pos") (glsl-field-decl "float" "i"))
               "struct Light { vec3 pos; float i; };")
 
 ;; ---------- 美化（glsl-pretty）断言 ----------

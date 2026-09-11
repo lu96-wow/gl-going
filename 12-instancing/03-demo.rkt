@@ -48,19 +48,19 @@
              4 0 3  4 3 7  3 2 6  3 6 7  4 5 1  4 1 0))
 
 ;; 实例 struct：与 shader 的 3 个实例 attribute 一一对应
-;; （= GLSL 的 struct Instance；字段名/类型写一次，数据 + stride/offset 都从它推导）
-(define-glsl-struct Instance
-  (offset vec3)
-  (color  vec3)
-  (phase  float))
+;; （= GLSL 的 struct instance；字段名/类型写一次，数据 + stride/offset 都从它推导）
+(glsl-struct instance
+  (vec3 offset)
+  (vec3 color)
+  (float phase))
 
 (define inst
   (apply concat-vecs
          (for/list ([i (in-range N)])
            (define ix (exact->inexact (quotient i 10)))
            (define iz (exact->inexact (remainder i 10)))
-           (Instance->f32vector
-            (Instance (vec3 (- (* ix 1.1) 4.95) 0.0 (- (* iz 1.1) 4.95))
+           (instance->f32vector
+            (instance (vec3 (- (* ix 1.1) 4.95) 0.0 (- (* iz 1.1) 4.95))
                       (vec3 (+ 0.15 (* 0.5 (/ ix 9.0)))
                             (+ 0.25 (* 0.55 (/ iz 9.0)))
                             0.9)
@@ -107,14 +107,14 @@
           (define ib (u32vector-ref (glGenBuffers 1) 0))
           (glBindBuffer GL_ARRAY_BUFFER ib)
           (glBufferData GL_ARRAY_BUFFER (gl-vector-sizeof inst) inst GL_STATIC_DRAW)
-          ;; ★实例数组每行 7 float（偏移 xyz + 颜色 rgb + 相位 w），stride/size/offset 从 Instance 推导
-          (glVertexAttribPointer 1 (Instance-field-size 'offset) GL_FLOAT #f (Instance-stride) (Instance-field-offset 'offset))
+          ;; ★实例数组每行 7 float（偏移 xyz + 颜色 rgb + 相位 w），stride/size/offset 从 instance 推导
+          (glVertexAttribPointer 1 (instance-field-size 'offset) GL_FLOAT #f (instance-stride) (instance-field-offset 'offset))
           (glVertexAttribDivisor 1 1)
           (glEnableVertexAttribArray 1)
-          (glVertexAttribPointer 2 (Instance-field-size 'color) GL_FLOAT #f (Instance-stride) (Instance-field-offset 'color))
+          (glVertexAttribPointer 2 (instance-field-size 'color) GL_FLOAT #f (instance-stride) (instance-field-offset 'color))
           (glVertexAttribDivisor 2 1)
           (glEnableVertexAttribArray 2)
-          (glVertexAttribPointer 3 (Instance-field-size 'phase) GL_FLOAT #f (Instance-stride) (Instance-field-offset 'phase))
+          (glVertexAttribPointer 3 (instance-field-size 'phase) GL_FLOAT #f (instance-stride) (instance-field-offset 'phase))
           (glVertexAttribDivisor 3 1)
           (glEnableVertexAttribArray 3)
           (glBindVertexArray 0)

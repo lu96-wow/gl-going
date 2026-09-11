@@ -31,7 +31,7 @@
  glsl-stmt glsl-block glsl-if glsl-for glsl-while glsl-do-while
  glsl-switch glsl-break glsl-continue glsl-return glsl-discard
  ;; 函数 / 结构
- glsl-param glsl-fn glsl-field-decl glsl-struct)
+ glsl-param glsl-fn glsl-field-decl glsl-struct-decl)
 
 ;; ---------- 内部工具 ----------
 
@@ -303,6 +303,6 @@
 (define (glsl-field-decl type name)
   (format "~a ~a;" (->str type) (->str name)))
 
-(define (glsl-struct name . fields)
+(define (glsl-struct-decl name . fields)
   (format "struct ~a { ~a };"
           (->str name) (join-spaces fields)))

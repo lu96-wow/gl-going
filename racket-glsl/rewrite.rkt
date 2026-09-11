@@ -341,7 +341,7 @@
     (list 'glsl-field-decl (rw-type (car f)) (symbol->string (cadr f))))
 
   (define (rw-struct args)
-    (list* 'glsl-struct (symbol->string (car args)) (map rw-field (cdr args))))
+    (list* 'glsl-struct-decl (symbol->string (car args)) (map rw-field (cdr args))))
 
   ;; ---------- 顶层 ----------
   (define (rw-top t)

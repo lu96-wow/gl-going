@@ -12,7 +12,7 @@
 ;;   - 覆盖"CPU 有数据表示"的全部 GLSL 向量/矩阵类型：vec/dvec/ivec/uvec/bvec/mat/dmat。
 ;;     sampler*/image*/atomic_uint 没有 CPU 向量，不在本模块。
 ;;   - 标量（float/int/uint/bool/double）直接就是 Racket 数，不重定义，避免遮蔽 Racket 内置。
-;;   - struct：define-glsl-struct 把 GLSL 的 struct（具名字段）镜像到 CPU 侧，
+;;   - struct：glsl-struct 把 GLSL 的 struct（具名字段）镜像到 CPU 侧，
 ;;     一并生成铺平 / stride / offset / size（供 VBO + glVertexAttribPointer 用）。
 ;;   - 精度是 GLSL 命名轴上的选择：vec→f32vector，dvec→f64vector。别名透明，
 ;;     结果是货真价实的 ffi/vector，随时可用 ffi/vector 的 API（本模块已 all-from-out 转发）。
@@ -48,7 +48,7 @@
          ;; vec：n 个同型向量的缓冲（静态/动态顶点数据）
          vec make-vec vec? vec-count vec-width vec-ref vec-set! vec->f32vector
          ;; GLSL struct：具名字段，与 shader 的 (struct ...) 对齐
-         define-glsl-struct
+         glsl-struct
          ;; 尺寸 / 步长帮助
          glsl-size glsl-byte-size glsl-stride glsl-stride-bytes glsl-type-table)
 
@@ -279,7 +279,7 @@
   (apply + (map glsl-byte-size types)))
 
 ;; 低层原语：按类型清单把字段值铺成一条交错的 f32 记录（标量字段直接给数）。
-;; 一般不要直接用——用 define-glsl-struct（具名字段）表达交错记录，它内部调 pack。
+;; 一般不要直接用——用 glsl-struct（具名字段）表达交错记录，它内部调 pack。
 ;; 注：pack 面向 float 顶点数据（标量字段 = float，给 flonum；向量字段给 vec/mat）。
 (define (pack types . fields)
   (unless (= (length types) (length fields))
@@ -295,7 +295,7 @@
               f]
              [else (error 'pack "字段 ~s 应为标量（flonum）或 f32 向量，实际 ~s" t f)]))))
 
-;; 低层原语：交错布局里每个字段的字节偏移（define-glsl-struct 内部用）：
+;; 低层原语：交错布局里每个字段的字节偏移（glsl-struct 内部用）：
 ;;   (glsl-field-offsets '(vec3 vec3 float)) → '(0 12 24)
 (define (glsl-field-offsets types)
   (let loop ([ts types] [off 0] [acc '()])
@@ -305,28 +305,28 @@
 
 ;; ============================================================
 ;; GLSL struct：把 shader 里的 struct 镜像到 CPU 侧。
-;;   (define-glsl-struct Instance (offset vec3) (color vec3) (phase float))
+;;   用法与 shader 一致，字段写 (类型 名字)：
+;;   (glsl-struct instance (vec3 offset) (vec3 color) (float phase))
 ;; 生成：
-;;   - Racket struct：Instance（构造器，与 GLSL 的 struct 构造器同名）/ Instance? / Instance-offset / ...
-;;   - (Instance->f32vector rec)  铺平成交错 f32vector（喂 VBO）
-;;   - (Instance-stride)          总字节步长
-;;   - (Instance-field-offset 'x) 字段字节偏移（给 glVertexAttribPointer）
-;;   - (Instance-field-size   'x) 字段分量数（给 glVertexAttribPointer 的 size）
-;; 字段名/类型与 shader 的 (glsl (struct Instance ...)) 一一对应。
+;;   - Racket struct：instance（构造器，与 GLSL 的 struct 构造器同名）/ instance? / instance-offset / ...
+;;   - (instance->f32vector rec)  铺平成交错 f32vector（喂 VBO）
+;;   - (instance-stride)          总字节步长
+;;   - (instance-field-offset 'x) 字段字节偏移（给 glVertexAttribPointer）
+;;   - (instance-field-size   'x) 字段分量数（给 glVertexAttribPointer 的 size）
+;; 与 shader 的 (glsl (struct Instance (vec3 offset) (vec3 color) (float phase)))
+;; 字段顺序、类型、名字完全一致。
 ;; ============================================================
-(define-syntax (define-glsl-struct stx)
+(define-syntax (glsl-struct stx)
   (syntax-case stx ()
-    [(_ Name (field type) ...)
-     (let* ([fields (syntax->list #'(field ...))]
-            [types  (syntax->list #'(type ...))])
+    [(_ Name (type field) ...)
+     (let* ([types  (syntax->list #'(type ...))]
+            [fields (syntax->list #'(field ...))])
        (when (null? fields)
-         (error 'define-glsl-struct "至少需要一个字段"))
+         (error 'glsl-struct "至少需要一个字段"))
        (with-syntax
-         ([types-name   (format-id #'Name "~a-types" #'Name)]
-          [types-list   (datum->syntax #'Name (map syntax->datum types))]
+         ([types-list   (datum->syntax #'Name (map syntax->datum types))]
           [to-f32       (format-id #'Name "~a->f32vector" #'Name)]
           [stride-fn    (format-id #'Name "~a-stride" #'Name)]
-          [field-index  (format-id #'Name "~a-field-index" #'Name)]
           [field-offset (format-id #'Name "~a-field-offset" #'Name)]
           [field-size   (format-id #'Name "~a-field-size" #'Name)]
           [(field-acc ...)
@@ -336,16 +336,17 @@
              #`[(#,f) #,i])])
          #'(begin
              (struct Name (field ...) #:transparent)
-             (define types-name 'types-list)
              (define (to-f32 rec)
-               (pack types-name (field-acc rec) ...))
+               (pack 'types-list (field-acc rec) ...))
              (define (stride-fn)
-               (apply glsl-stride-bytes types-name))
-             (define (field-index f)
-               (case f
-                 field-clause ...
-                 [else (error 'field-index "未知字段：~s" f)]))
+               (apply glsl-stride-bytes 'types-list))
              (define (field-offset f)
-               (list-ref (glsl-field-offsets types-name) (field-index f)))
+               (list-ref (glsl-field-offsets 'types-list)
+                         (case f
+                           field-clause ...
+                           [else (error 'field-offset "未知字段：~s" f)])))
              (define (field-size f)
-               (glsl-size (list-ref types-name (field-index f)))))))]))
+               (glsl-size (list-ref 'types-list
+                                    (case f
+                                      field-clause ...
+                                      [else (error 'field-size "未知字段：~s" f)])))))))]))

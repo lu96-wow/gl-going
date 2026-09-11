@@ -114,38 +114,38 @@
 (check-equal? (glsl-stride-bytes 'vec3 'dvec3) 36)
 (check-exn exn:fail? (lambda () (glsl-size 'sampler2D)))    ; 无 CPU 表示
 
-;; ---------- define-glsl-struct：交错记录 ----------
-;; 具名字段：生成构造器 / 访问器 / 铺平 / stride / offset / size
-(define-glsl-struct Instance
-  (offset vec3)
-  (color  vec3)
-  (phase  float))
+;; ---------- glsl-struct：交错记录 ----------
+;; 具名字段（(类型 名字)，与 shader 一致）：生成构造器 / 访问器 / 铺平 / stride / offset / size
+(glsl-struct instance
+  (vec3 offset)
+  (vec3 color)
+  (float phase))
 
-(check-true (Instance? (Instance (vec3 1.0 2.0 3.0) (vec3 4.0 5.0 6.0) 0.5)))
-(check-equal? (lv (Instance-offset (Instance (vec3 1.0 2.0 3.0) (vec3 4.0 5.0 6.0) 0.5)))
+(check-true (instance? (instance (vec3 1.0 2.0 3.0) (vec3 4.0 5.0 6.0) 0.5)))
+(check-equal? (lv (instance-offset (instance (vec3 1.0 2.0 3.0) (vec3 4.0 5.0 6.0) 0.5)))
               '(1.0 2.0 3.0))
 ;; 铺平：向量 + 向量 + 标量 → 一条 f32vector（用 f32 里精确可表示的数）
-(check-equal? (lv (Instance->f32vector
-                   (Instance (vec3 1.0 2.0 3.0) (vec3 0.5 0.25 0.125) 0.75)))
+(check-equal? (lv (instance->f32vector
+                   (instance (vec3 1.0 2.0 3.0) (vec3 0.5 0.25 0.125) 0.75)))
               '(1.0 2.0 3.0 0.5 0.25 0.125 0.75))
 ;; 布局从 struct 声明推导
-(check-equal? (Instance-stride) 28)
-(check-equal? (Instance-field-offset 'offset) 0)
-(check-equal? (Instance-field-offset 'color) 12)
-(check-equal? (Instance-field-offset 'phase) 24)
-(check-equal? (Instance-field-size 'offset) 3)
-(check-equal? (Instance-field-size 'color) 3)
-(check-equal? (Instance-field-size 'phase) 1)
-(check-exn exn:fail? (lambda () (Instance-field-offset 'nope)))
+(check-equal? (instance-stride) 28)
+(check-equal? (instance-field-offset 'offset) 0)
+(check-equal? (instance-field-offset 'color) 12)
+(check-equal? (instance-field-offset 'phase) 24)
+(check-equal? (instance-field-size 'offset) 3)
+(check-equal? (instance-field-size 'color) 3)
+(check-equal? (instance-field-size 'phase) 1)
+(check-exn exn:fail? (lambda () (instance-field-offset 'nope)))
 
 ;; 纯向量字段的 struct（无标量）也能铺平
-(define-glsl-struct Vert (pos vec3) (nrm vec3))
-(check-equal? (lv (Vert->f32vector (Vert (vec3 1.0 2.0 3.0) (vec3 4.0 5.0 6.0))))
+(glsl-struct vert (vec3 pos) (vec3 nrm))
+(check-equal? (lv (vert->f32vector (vert (vec3 1.0 2.0 3.0) (vec3 4.0 5.0 6.0))))
               '(1.0 2.0 3.0 4.0 5.0 6.0))
-(check-equal? (Vert-stride) 24)
-(check-equal? (Vert-field-offset 'nrm) 12)
+(check-equal? (vert-stride) 24)
+(check-equal? (vert-field-offset 'nrm) 12)
 
 ;; 空 struct → 报错
-(check-exn exn:fail? (lambda () (eval '(define-glsl-struct Empty))))
+(check-exn exn:fail? (lambda () (eval '(glsl-struct Empty))))
 
 (displayln "rename-vector 全部测试通过")
