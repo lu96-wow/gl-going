@@ -12,7 +12,7 @@
 ;;   - 每个顶点/每个像素独立跑同一份代码，没有全局状态、不能互相通信。
 ;;
 ;; ★GLSL 代码的骨架（下面 vert-src 逐行读）：
-;;   (version 330 core)                   版本 + 现代 core profile
+;;   (version 330 core)                   版本 + core profile（按 core 写，不用旧式内建变量）
 ;;   (layout (location 0) in vec2 aPos)   输入 attribute：每个顶点一份，
 ;;                                        挂在 0 号槽，类型 vec2
 ;;   (define (main) void ...)             入口固定叫 main，void = 无返回值

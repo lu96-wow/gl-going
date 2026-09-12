@@ -44,7 +44,8 @@
 (require "../racket-glsl/rewrite.rkt")   ; (glsl ...) 宏 + glsl-pretty
 
 ;; 顶点着色器（逐行读）：
-;;   (version 330 core)               版本声明：330 = GLSL 3.3，core = 现代
+;;   (version 330 core)               版本声明：330 = GLSL 3.3；core = 按
+;;                                    core profile 写（不用旧式固定管线的内建变量）
 ;;   (layout (location 0) in vec2 aPos)
 ;;       in   = 输入 attribute（"每个顶点一份"的数据，跟着顶点走）
 ;;       aPos = 用户自定义名字（②类），声明成 vec2 类型

@@ -24,7 +24,7 @@
                      #:width [w 400]
                      #:height [h 300])
   (define cfg (new gl-config%))
-  (send cfg set-legacy? #f)
+  (send cfg set-legacy? #f)   ; 请求 core profile（非 legacy），不用旧式固定管线
   (send cfg set-double-buffered #t)
   (send cfg set-depth-size 24)    ; 申请 24 位深度缓冲（08 课起深度测试要用）
 

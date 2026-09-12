@@ -19,7 +19,7 @@
 (require racket/gui opengl)
 
 (define cfg (new gl-config%))
-(send cfg set-legacy? #f)
+(send cfg set-legacy? #f)        ; 请求 core profile（非 legacy），不用旧式固定管线
 (send cfg set-double-buffered #t)
 
 (define frame
