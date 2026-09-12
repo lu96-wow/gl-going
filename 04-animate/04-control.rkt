@@ -11,7 +11,7 @@
 ;; 键盘空格切换暂停——所以本步自建窗口（要加 on-char 键盘钩子），
 ;; 顺便认识键盘输入（后面相机课还会用）。
 
-(require racket/gui opengl)                 ; 窗口、画布、timer% + gl* 函数常量
+(require racket/gui "../racket-glsl/opengl-rename.rkt")  ; 窗口、画布、timer% + gl-* 函数与常量
 (require "../racket-glsl/rewrite.rkt")
 (require "../racket-glsl/rename-vector.rkt")
 (require "../racket-glsl/tool.rkt")
@@ -51,9 +51,9 @@
 (define (draw)
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (use-program prog)
-  (glUniform1f loc-time t)
-  (glBindVertexArray vao)
-  (glDrawArrays GL_TRIANGLES 0 3))
+  (gl-uniform-1f loc-time t)
+  (gl-bind-vertex-array vao)
+  (gl-draw-arrays gl-triangles 0 3))
 
 ;; 窗口（同 02 课：点 X 退出）。键盘钩子不在这里，在下面画布上。
 (define frame
@@ -77,12 +77,12 @@
            (with-gl-context
             (lambda ()
               (define-values (fw fh) (send this get-gl-client-size))
-              (glViewport 0 0 fw fh))))
+              (gl-viewport 0 0 fw fh))))
          (define/override (on-paint)
            (with-gl-context
             (lambda ()
-              (glClearColor 0.10 0.12 0.20 1.0)
-              (glClear GL_COLOR_BUFFER_BIT)
+              (gl-clear-color 0.10 0.12 0.20 1.0)
+              (gl-clear gl-color-buffer-bit)
               (draw)
               (send this swap-gl-buffers))))
          (super-new))
@@ -93,21 +93,21 @@
 ;; 初始化（同 02/03）。
 (define prog
   (send canvas with-gl-context
-    (lambda () (build-program (GL_VERTEX_SHADER vert-src) (GL_FRAGMENT_SHADER frag-src)))))
+    (lambda () (build-program (gl-vertex-shader vert-src) (gl-fragment-shader frag-src)))))
 (define loc-time
   (send canvas with-gl-context (lambda () (uniform-location prog "uTime"))))
 (define vao
   (send canvas with-gl-context
     (lambda ()
       (define data (vec->f32vector verts))
-      (define vbo (u32vector-ref (glGenBuffers 1) 0))
-      (glBindBuffer GL_ARRAY_BUFFER vbo)
-      (glBufferData GL_ARRAY_BUFFER (gl-vector-sizeof data) data GL_STATIC_DRAW)
-      (define v (u32vector-ref (glGenVertexArrays 1) 0))
-      (glBindVertexArray v)
-      (glVertexAttribPointer 0 2 GL_FLOAT #f 8 0)
-      (glEnableVertexAttribArray 0)
-      (glBindVertexArray 0)
+      (define vbo (u32vector-ref (gl-gen-buffers 1) 0))
+      (gl-bind-buffer gl-array-buffer vbo)
+      (gl-buffer-data gl-array-buffer (gl-vector-sizeof data) data gl-static-draw)
+      (define v (u32vector-ref (gl-gen-vertex-arrays 1) 0))
+      (gl-bind-vertex-array v)
+      (gl-vertex-attrib-pointer 0 2 gl-float #f 8 0)
+      (gl-enable-vertex-attrib-array 0)
+      (gl-bind-vertex-array 0)
       v)))
 
 ;; 定时器（同 01）。暂停/继续由 on-key 里的 stop/start 控制。

@@ -3,19 +3,19 @@
 ;; 02-triangle/04-gui-tool.rkt —— 窗口工具（本课版）
 ;; =========================================================
 ;; 从 01-window/04-gui-tool.rkt 复制，本课新增一件事：
-;;   视口处理（on-size + glViewport）。
+;;   视口处理（on-size + gl-viewport）。
 ;;
 ;; 为什么本课才加：视口决定"-1..1 的坐标"映射到哪个像素矩形。
-;;   01 课只清屏，glClear 清的是整块缓冲、与视口无关，所以不需要；
+;;   01 课只清屏，gl-clear 清的是整块缓冲、与视口无关，所以不需要；
 ;;   本课开始画几何（三角形），几何要按视口定位——不设视口，三角形会被裁掉。
 ;;
 ;; 其余（上下文 / 点 X 退出 / 清屏 / 翻页）与 01 相同。
 ;; =========================================================
 
-(require racket/gui opengl)
+(require racket/gui "../racket-glsl/opengl-rename.rkt")
 (provide make-window
          (all-from-out racket/gui)   ; frame% canvas% 等
-         (all-from-out opengl))      ; gl* 函数、GL_* 常量
+         (all-from-out "../racket-glsl/opengl-rename.rkt"))   ; gl-* 函数与常量
 
 (define (make-window #:title title
                      #:draw [draw void]
@@ -31,20 +31,20 @@
     (class canvas%
       (inherit with-gl-context swap-gl-buffers)
       ;; on-size：尺寸变化（含第一次显示）时调用。
-      ;; 视口 = 把 -1..1 映射到哪个像素矩形；铺满整个绘图区 = glViewport(0,0,fw,fh)。
-      ;; 注意 w h 不用：它们是"整个窗口"的逻辑像素（含边框），不是 glViewport
+      ;; 视口 = 把 -1..1 映射到哪个像素矩形；铺满整个绘图区 = gl-viewport(0,0,fw,fh)。
+      ;; 注意 w h 不用：它们是"整个窗口"的逻辑像素（含边框），不是 gl-viewport
       ;; 要的；要的是绘图区的真实 GL 像素尺寸 → get-gl-client-size。
       (define/override (on-size w h)
         (with-gl-context
          (lambda ()
            (define-values (fw fh) (send this get-gl-client-size))
-           (glViewport 0 0 fw fh))))
+           (gl-viewport 0 0 fw fh))))
       ;; on-paint：每帧 清屏 → draw → 翻页
       (define/override (on-paint)
         (with-gl-context
          (lambda ()
-           (glClearColor 0.10 0.12 0.20 1.0)  ; 清屏色（深蓝灰）
-           (glClear GL_COLOR_BUFFER_BIT)
+           (gl-clear-color 0.10 0.12 0.20 1.0)  ; 清屏色（深蓝灰）
+           (gl-clear gl-color-buffer-bit)
            (draw)                              ; 你的每帧内容
            (send this swap-gl-buffers))))
       (super-new)))

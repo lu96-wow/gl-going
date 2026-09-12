@@ -28,8 +28,8 @@
 (define (draw)
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (define breathe (+ 0.5 (* 0.5 (sin t))))
-  (glClearColor breathe 0.12 0.20 1.0)
-  (glClear GL_COLOR_BUFFER_BIT))
+  (gl-clear-color breathe 0.12 0.20 1.0)
+  (gl-clear gl-color-buffer-bit))
 
 (define-values (frame canvas)
   (make-window #:title "04-01 让帧发生" #:width 400 #:height 400 #:draw draw))

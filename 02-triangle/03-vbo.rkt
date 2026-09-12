@@ -33,25 +33,25 @@
       ;; vec->f32vector：拿到底层连续的一块 f32vector（上传要连续的字节块）
       (define data (vec->f32vector verts))
 
-      ;; glGenBuffers：生成缓冲对象。GL 的 C 函数一次能生成 n 个编号，
+      ;; gl-gen-buffers：生成缓冲对象。GL 的 C 函数一次能生成 n 个编号，
       ;; 所以 Racket 绑定返回一个 u32vector（编号数组）。
       ;;   u32vector-ref = 从 u32vector 取第 i 个元素（u32 = 32 位无符号整数，
       ;;   这个类型来自 ffi/vector，racket-glsl 的 rename-vector 重新导出了它）。
       ;;   这里取第 0 个 = 我们只生成了 1 个，拿它当 vbo 编号。
-      (define vbo (u32vector-ref (glGenBuffers 1) 0))
+      (define vbo (u32vector-ref (gl-gen-buffers 1) 0))
 
-      ;; glBindBuffer：把 vbo 设为"当前要操作的缓冲"（GL 状态机）。
-      ;; GL_ARRAY_BUFFER 是 GL 常量，表示"这块缓冲的用途 = 存顶点属性数据"。
-      (glBindBuffer GL_ARRAY_BUFFER vbo)
+      ;; gl-bind-buffer：把 vbo 设为"当前要操作的缓冲"（GL 状态机）。
+      ;; gl-array-buffer 是 GL 常量，表示"这块缓冲的用途 = 存顶点属性数据"。
+      (gl-bind-buffer gl-array-buffer vbo)
 
-      ;; glBufferData：把数据真正拷进 GPU。
-      ;;   (gl-vector-sizeof data) = 这块 f32vector 占多少字节（opengl 的小工具）
-      ;;   GL_STATIC_DRAW = 使用提示"数据基本不变"（GL 据此做优化；
-      ;;                    经常改换 GL_DYNAMIC_DRAW，每帧改换 GL_STREAM_DRAW）
-      (glBufferData GL_ARRAY_BUFFER
+      ;; gl-buffer-data：把数据真正拷进 GPU。
+      ;;   (gl-vector-sizeof data) = 这块 f32vector 占多少字节（统一命名层转出的工具）
+      ;;   gl-static-draw = 使用提示"数据基本不变"（GL 据此做优化；
+      ;;                    经常改换 gl-dynamic-draw，每帧改换 gl-stream-draw）
+      (gl-buffer-data gl-array-buffer
                     (gl-vector-sizeof data)
                     data
-                    GL_STATIC_DRAW)
+                    gl-static-draw)
 
       ;; ── ② VAO：连续数据的"切片手册" ──
       ;; VBO 里是一条**连续**的字节流（顶点一个接一个平铺，没有结构）。
@@ -64,29 +64,29 @@
       ;;   ① 画的时候只要"绑 VAO"一步，就带上了整套切法，省事；
       ;;   ② core profile 里画东西**必须**绑一个 VAO，没 VAO 连画都不让画。
       ;;
-      ;; glGenVertexArrays：生成 VAO 对象（同 glGenBuffers，返回 u32vector）。
-      (define v (u32vector-ref (glGenVertexArrays 1) 0))
+      ;; gl-gen-vertex-arrays：生成 VAO 对象（同 gl-gen-buffers，返回 u32vector）。
+      (define v (u32vector-ref (gl-gen-vertex-arrays 1) 0))
 
-      ;; glBindVertexArray：绑定 VAO——之后所有切片规则都记在它上面。
-      (glBindVertexArray v)
+      ;; gl-bind-vertex-array：绑定 VAO——之后所有切片规则都记在它上面。
+      (gl-bind-vertex-array v)
 
       ;; 回想 01-shader.rkt：shader 里 (layout (location 0) in vec2 aPos)
       ;; 声明"0 号槽 = 一个 vec2 位置"。这里用同一个号码 0 对齐。
-      ;; glVertexAttribPointer(0, ...) = "0 号槽的数据长这样"，参数逐一看：
+      ;; gl-vertex-attrib-pointer(0, ...) = "0 号槽的数据长这样"，参数逐一看：
       ;;   0        —— 槽号（对应 shader 的 location 0）
       ;;   2        —— 每个属性 2 个分量（x、y）
-      ;;   GL_FLOAT —— 每个分量的类型是 float（GL 常量）
+      ;;   gl-float —— 每个分量的类型是 float（GL 常量）
       ;;   #f       —— 不归一化（float 数据不需要；整数数据要归一化到 0~1 才用 #t）
       ;;   8        —— 步长：切完这一片，要跳过 8 字节才到下一个顶点
       ;;               （一个顶点 = 2 个 float × 4 字节）
       ;;   0        —— 偏移：从流的第 0 字节开始切（只有这一个属性）
-      (glVertexAttribPointer 0 2 GL_FLOAT #f 8 0)
+      (gl-vertex-attrib-pointer 0 2 gl-float #f 8 0)
 
-      ;; glEnableVertexAttribArray：启用 0 号槽（不启用的槽 GPU 不会读）
-      (glEnableVertexAttribArray 0)
+      ;; gl-enable-vertex-attrib-array：启用 0 号槽（不启用的槽 GPU 不会读）
+      (gl-enable-vertex-attrib-array 0)
 
-      (glBindVertexArray 0)   ; 解绑收好
+      (gl-bind-vertex-array 0)   ; 解绑收好
       v)))
 
 (printf "3 个顶点已上传，VAO 已记录：0 号槽 = 每顶点 2 个 float\n")
-;; 本步还不画，画面是清屏色；下一步 glDrawArrays 才真正画出来。
+;; 本步还不画，画面是清屏色；下一步 gl-draw-arrays 才真正画出来。

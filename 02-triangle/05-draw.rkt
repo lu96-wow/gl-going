@@ -6,8 +6,8 @@
 
 ;; 程序有了（02 步），顶点数据 + VAO 有了（03 步）。最后一步：画。
 ;; 新增两个：
-;;   use-program  —— 启用程序（tool.rkt 里 glUseProgram 的包装）
-;;   glDrawArrays —— 真正画
+;;   use-program  —— 启用程序（tool.rkt 里 gl-use-program 的包装）
+;;   gl-draw-arrays —— 真正画
 
 (require "04-gui-tool.rkt")         ; 本课的窗口工具（带视口）
 (require "../racket-glsl/rewrite.rkt")        ; (glsl ...) 宏
@@ -35,9 +35,9 @@
 ;; 每帧画什么。注意：make-window 已自动"清屏"，这里只画内容。
 (define (draw)
   (use-program prog)          ; 用哪个程序
-  (glBindVertexArray vao)     ; 绑上 VAO（拿到"数据说明书"）
-  ;; GL_TRIANGLES = 每 3 个顶点一组三角形；从第 0 个顶点起，画 3 个
-  (glDrawArrays GL_TRIANGLES 0 3))
+  (gl-bind-vertex-array vao)     ; 绑上 VAO（拿到"数据说明书"）
+  ;; gl-triangles = 每 3 个顶点一组三角形；从第 0 个顶点起，画 3 个
+  (gl-draw-arrays gl-triangles 0 3))
 
 (define-values (frame canvas)
   (make-window #:title "02-05 第一个三角形" #:draw draw))
@@ -47,20 +47,20 @@
 (define prog
   (send canvas with-gl-context
     (lambda ()
-      (build-program (GL_VERTEX_SHADER vert-src)
-                     (GL_FRAGMENT_SHADER frag-src)))))
+      (build-program (gl-vertex-shader vert-src)
+                     (gl-fragment-shader frag-src)))))
 (define vao
   (send canvas with-gl-context
     (lambda ()
       (define data (vec->f32vector verts))
-      (define vbo (u32vector-ref (glGenBuffers 1) 0))
-      (glBindBuffer GL_ARRAY_BUFFER vbo)
-      (glBufferData GL_ARRAY_BUFFER (gl-vector-sizeof data) data GL_STATIC_DRAW)
-      (define v (u32vector-ref (glGenVertexArrays 1) 0))
-      (glBindVertexArray v)
-      (glVertexAttribPointer 0 2 GL_FLOAT #f 8 0)
-      (glEnableVertexAttribArray 0)
-      (glBindVertexArray 0)
+      (define vbo (u32vector-ref (gl-gen-buffers 1) 0))
+      (gl-bind-buffer gl-array-buffer vbo)
+      (gl-buffer-data gl-array-buffer (gl-vector-sizeof data) data gl-static-draw)
+      (define v (u32vector-ref (gl-gen-vertex-arrays 1) 0))
+      (gl-bind-vertex-array v)
+      (gl-vertex-attrib-pointer 0 2 gl-float #f 8 0)
+      (gl-enable-vertex-attrib-array 0)
+      (gl-bind-vertex-array 0)
       v)))
 
 (send frame show #t)

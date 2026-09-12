@@ -4,10 +4,11 @@
 ;; 运行：racket 01-window/03-first-frame.rkt
 ;; =========================================================
 
-;; 终于要"画"了。这次引入 opengl 库。
-;; 它的命名规则：gl 开头的都是函数（glClearColor、glClear），
-;;               GL_ 开头的都是常量（GL_COLOR_BUFFER_BIT 等）。
-(require racket/gui opengl)
+;; 终于要"画"了。这次除了 racket/gui，再引入统一命名层（racket-glsl/opengl-rename）。
+;; OpenGL 原始命名是 C 风格：函数 glClearColor（驼峰）、常量 GL_COLOR_BUFFER_BIT
+;; （全大写 + 下划线）。统一命名层把它们全换成 Racket 的 kebab-case：
+;;   gl-clear-color、gl-clear、gl-color-buffer-bit —— 全小写 + 连字符。
+(require racket/gui "../racket-glsl/opengl-rename.rkt")
 
 ;; ① 窗口类 + ② 上下文配置，同 02-gl-window.rkt（不再解释）。
 (define closeable-frame%
@@ -35,15 +36,15 @@
     ;; define/override = 整体替换父类方法（父类的 on-paint 默认什么都不画）。
     (define/override (on-paint)
       ;; with-gl-context：本画布的方法。它接收一个"要执行的函数"，先把本画布的
-      ;; GL 上下文设为"当前"，再执行那个函数。所有 gl* 调用都必须写在这个函数里：
+      ;; GL 上下文设为"当前"，再执行那个函数。所有 gl-* 调用都必须写在这个函数里：
       ;; GL 是状态机，状态存在"当前上下文"里，不进去就不知道该改谁的状态。
       (with-gl-context
        (lambda ()
          ;; 画一帧 = 清屏。GL 状态机的两步：
-         (glClearColor 0.10 0.12 0.20 1.0)  ; ① 先"记住"清屏色（深蓝灰 r g b a，各 0~1）
-         ;; GL_COLOR_BUFFER_BIT 是 opengl 的常量："颜色缓冲" = 存每个像素颜色的
+         (gl-clear-color 0.10 0.12 0.20 1.0)  ; ① 先"记住"清屏色（深蓝灰 r g b a，各 0~1）
+         ;; gl-color-buffer-bit 是 GL 常量："颜色缓冲" = 存每个像素颜色的
          ;; 那块内存（GL 还有深度/模板等别的缓冲，这个常量指定擦哪一种）。
-         (glClear GL_COLOR_BUFFER_BIT)       ; ② 再执行：把颜色缓冲擦成那个色
+         (gl-clear gl-color-buffer-bit)       ; ② 再执行：把颜色缓冲擦成那个色
          ;; swap-gl-buffers：双缓冲的"翻页"。双缓冲 = 两块缓冲：前台（正显示在
          ;; 屏幕）和后台（你在上面画）。画完交换两块，后台变前台。如果直接画
          ;; 前台，画到一半的中间态会被看见 → 闪烁。
@@ -61,8 +62,8 @@
        (parent frame)))
 
 ;; 运行后窗口是一整片深蓝灰色——这就是"画出来的一帧"。
-;; 拖大拖小都还是整片蓝：glClear 清的是"整块颜色缓冲"，和视口无关。
-;; （视口 glViewport 是后面画几何图形时才需要的东西，这里先不引入。）
+;; 拖大拖小都还是整片蓝：gl-clear 清的是"整块颜色缓冲"，和视口无关。
+;; （视口 gl-viewport 是后面画几何图形时才需要的东西，这里先不引入。）
 ;;
 ;; ★当前代码下，图像是怎么"一直显示"的？
 ;;   画完 + swap 之后，程序就闲下来了（事件循环在等下一个事件），

@@ -15,13 +15,13 @@
 ;;   ④ 把 frame、canvas 两个对象交还给你（不自动 show，见文件末尾）
 ;; =========================================================
 
-(require racket/gui opengl)
+(require racket/gui "../racket-glsl/opengl-rename.rkt")
 (provide make-window
          (all-from-out racket/gui)   ; frame% canvas% 等
-         (all-from-out opengl))      ; gl* 函数、GL_* 常量
+         (all-from-out "../racket-glsl/opengl-rename.rkt"))   ; gl-* 函数与常量
 
 ;; #:title 窗口标题；#:width/#:height 窗口大小；#:draw 每帧画什么（可选，不给就只清屏）。
-;; 注意：你的 #:draw 会在 GL 上下文里被调用，里面可以直接写 gl* 调用。
+;; 注意：你的 #:draw 会在 GL 上下文里被调用，里面可以直接写 gl-* 调用。
 (define (make-window #:title title
                      #:draw [draw void]
                      #:width [w 400]
@@ -38,8 +38,8 @@
       (define/override (on-paint)
         (with-gl-context
          (lambda ()
-           (glClearColor 0.10 0.12 0.20 1.0)  ; 清屏色（深蓝灰）
-           (glClear GL_COLOR_BUFFER_BIT)
+           (gl-clear-color 0.10 0.12 0.20 1.0)  ; 清屏色（深蓝灰）
+           (gl-clear gl-color-buffer-bit)
            (draw)                              ; 你的每帧内容
            (send this swap-gl-buffers))))
       (super-new)))

@@ -20,14 +20,14 @@
 ;;   你的程序（CPU） ──发命令──▶ OpenGL 驱动 ──转成硬件命令──▶ GPU
 ;;     客户端                          （排队/缓冲）              服务器
 ;;
-;; 关键点：命令是**异步**的。CPU 发出一条 gl* 命令，它只是"放进命令流"，
+;; 关键点：命令是**异步**的。CPU 发出一条 gl-* 命令，它只是"放进命令流"，
 ;; 并不等 GPU 执行完就返回了。命令可能在驱动里排队，真正在 GPU 上跑是
 ;; 之后的事。
 ;;
 ;; 这解释了两个我们 02 课遇到的"为什么"：
-;;   · 为什么 glCompileShader / glLinkProgram 之后要查状态？
+;;   · 为什么 gl-compile-shader / gl-link-program 之后要查状态？
 ;;     —— 因为调用返回 ≠ 编译/链接成功。它们只是"提交了编译/链接请求"，
-;;       必须再查 GL_COMPILE_STATUS / GL_LINK_STATUS 才知道结果。
+;;       必须再查 gl-compile-status / gl-link-status 才知道结果。
 ;;       不查，写错一行 GLSL 只会黑屏、毫无提示。
 ;;   · 为什么有个"上下文"？
 ;;     —— 因为命令要发给"某一个" GPU 上下文。上下文 = 一块完整的 GL 状态
@@ -39,18 +39,18 @@
 ;; ══════════════════════════════════════════════════════════
 ;;
 ;; GL 是一台**状态机**。所谓状态，就是"当前正在用哪一套东西"：
-;;   当前程序（glUseProgram 设的）、当前缓冲（glBindBuffer 设的）、
-;;   当前 VAO（glBindVertexArray 设的）、清屏色（glClearColor 设的）……
+;;   当前程序（gl-use-program 设的）、当前缓冲（gl-bind-buffer 设的）、
+;;   当前 VAO（gl-bind-vertex-array 设的）、清屏色（gl-clear-color 设的）……
 ;;
 ;; 于是 API 分成两类：
-;;   · 设状态的：glBindBuffer / glBindVertexArray / glUseProgram / glClearColor
-;;   · 用状态执行的：glBufferData / glDrawArrays / glClear
+;;   · 设状态的：gl-bind-buffer / gl-bind-vertex-array / gl-use-program / gl-clear-color
+;;   · 用状态执行的：gl-buffer-data / gl-draw-arrays / gl-clear
 ;;
 ;; 典型例子（01 课画第一帧）：
-;;   (glClearColor 0.10 0.12 0.20 1.0)   ; 只"记住"清屏色，还没画
-;;   (glClear GL_COLOR_BUFFER_BIT)        ; 现在才"用"它把整块颜色缓冲擦掉
+;;   (gl-clear-color 0.10 0.12 0.20 1.0)   ; 只"记住"清屏色，还没画
+;;   (gl-clear gl-color-buffer-bit)        ; 现在才"用"它把整块颜色缓冲擦掉
 ;;
-;; 这也是为什么 02 课上传 VBO 要先 glBindBuffer：glBufferData 不知道你要
+;; 这也是为什么 02 课上传 VBO 要先 gl-bind-buffer：gl-buffer-data 不知道你要
 ;; 操作哪个缓冲，它只会说"把数据拷进**当前绑定**的那个缓冲"。先绑、再操作，
 ;; 是 GL 状态机的统一套路。
 
@@ -61,13 +61,13 @@
 ;; GL 里的着色器、程序、VBO、VAO 都是**对象**。对象活在 GPU 一侧，
 ;; 你的程序手里只攥着一个整数编号（GLuint）来引用它。这就是"opaque handle"：
 ;;
-;;   创建 → glCreateShader / glCreateProgram / glGenBuffers / glGenVertexArrays
-;;   引用 → 拿编号当参数传给别的 gl* 调用
-;;   删除 → glDeleteShader / glDeleteProgram（mark 待删，真正释放等不用了）
+;;   创建 → gl-create-shader / gl-create-program / gl-gen-buffers / gl-gen-vertex-arrays
+;;   引用 → 拿编号当参数传给别的 gl-* 调用
+;;   删除 → gl-delete-shader / gl-delete-program（mark 待删，真正释放等不用了）
 ;;
-;; 所以你在 02 课看到的 (u32vector-ref (glGenBuffers 1) 0)，本质就是：
+;; 所以你在 02 课看到的 (u32vector-ref (gl-gen-buffers 1) 0)，本质就是：
 ;; "请在 GPU 上开 1 个缓冲对象，把它的编号给我"。
-;; （返回 u32vector 是因为 C 的 glGenBuffers 一次能开 n 个，Racket 绑定
+;; （返回 u32vector 是因为 C 的 gl-gen-buffers 一次能开 n 个，Racket 绑定
 ;;   沿用了这个签名，这里我们只取第 0 个。）
 
 ;; ══════════════════════════════════════════════════════════
@@ -90,7 +90,7 @@
 ;;
 ;; in 的数据从哪来？靠"槽号"对齐（01 课 layout(location 0)）：
 ;;   shader 里 (layout (location 0) in vec2 aPos)  说"0 号槽 = vec2 位置"；
-;;   CPU 侧 VAO 里 glVertexAttribPointer(0, ...)    说"0 号槽从缓冲这样读"。
+;;   CPU 侧 VAO 里 gl-vertex-attrib-pointer(0, ...)    说"0 号槽从缓冲这样读"。
 ;;   两边号码一致，数据就接上了。
 
 ;; ══════════════════════════════════════════════════════════
@@ -103,7 +103,7 @@
 ;;     (glsl ...) 宏 → 两段 GLSL 字符串
 ;;
 ;; ② 编译 + 链接（工具 racket-glsl/tool.rkt 帮我们藏了细节）
-;;     build-program (GL_VERTEX_SHADER vs) (GL_FRAGMENT_SHADER fs)
+;;     build-program (gl-vertex-shader vs) (gl-fragment-shader fs)
 ;;       内部 = compile-shader ×2 → link-program，失败自动报错带日志
 ;;
 ;; ③ 造顶点数据（CPU 侧）
@@ -111,27 +111,27 @@
 ;;       3 个顶点，每个 = 2 个 float
 ;;
 ;; ④ 上传到 GPU（VBO）
-;;     glGenBuffers    —— 开一个缓冲对象，拿编号
-;;     glBindBuffer    —— 设为"当前缓冲"（状态机）
-;;     glBufferData    —— 把数据拷进当前缓冲
+;;     gl-gen-buffers    —— 开一个缓冲对象，拿编号
+;;     gl-bind-buffer    —— 设为"当前缓冲"（状态机）
+;;     gl-buffer-data    —— 把数据拷进当前缓冲
 ;;
 ;; ⑤ 描述"怎么切"（VAO —— 连续数据的切片手册）
 ;;     VBO 是一条连续字节流，VAO 记"怎么在这条流上切出每个顶点的属性"：
 ;;     槽号/分量数/类型/步长/偏移、槽是否启用。画的时候绑上 VAO 就带上了
 ;;     整套切法；core profile 里必须有 VAO 才能画。
-;;     glGenVertexArrays / glBindVertexArray —— 开 VAO、设为当前
-;;     glVertexAttribPointer(0 2 GL_FLOAT #f 8 0) —— 0 号槽：每顶点 2 个
+;;     gl-gen-vertex-arrays / gl-bind-vertex-array —— 开 VAO、设为当前
+;;     gl-vertex-attrib-pointer(0 2 gl-float #f 8 0) —— 0 号槽：每顶点 2 个
 ;;                                                   float、步长 8 字节、从 0 读
-;;     glEnableVertexAttribArray 0             —— 启用 0 号槽
+;;     gl-enable-vertex-attrib-array 0             —— 启用 0 号槽
 ;;
 ;; ⑥ 画（每帧 on-paint 里）
-;;     use-program（= glUseProgram）    —— 用哪个程序
-;;     glBindVertexArray                —— 用哪份"数据说明书"
-;;     glDrawArrays GL_TRIANGLES 0 3    —— 从 0 号顶点起，画 3 个（一个三角形）
+;;     use-program（= gl-use-program）    —— 用哪个程序
+;;     gl-bind-vertex-array                —— 用哪份"数据说明书"
+;;     gl-draw-arrays gl-triangles 0 3    —— 从 0 号顶点起，画 3 个（一个三角形）
 ;;
 ;; ⑦ 显示
-;;     glClearColor + glClear           —— 清屏（与视口无关，清整块缓冲）
-;;     glViewport                       —— 视口：把 -1..1 映射到像素矩形
+;;     gl-clear-color + gl-clear           —— 清屏（与视口无关，清整块缓冲）
+;;     gl-viewport                       —— 视口：把 -1..1 映射到像素矩形
 ;;                                        （画几何必须有，否则被裁掉）
 ;;     swap-gl-buffers                  —— 双缓冲翻页：后台换到前台
 
@@ -157,28 +157,28 @@
 ;; ══════════════════════════════════════════════════════════
 ;;
 ;; 上下文
-;;   with-gl-context        进入本画布的 GL 上下文；所有 gl* 必须包在里面
+;;   with-gl-context        进入本画布的 GL 上下文；所有 gl-* 必须包在里面
 ;;
 ;; 程序（racket-glsl/tool.rkt 已包装）
 ;;   compile-shader         一段 GLSL → 着色器对象（失败抛错带日志）
 ;;   link-program           若干着色器对象 → 程序对象（失败抛错带日志）
 ;;   build-program          宏：(阶段类型 源码)... → 编译+链接一次成程序
-;;   use-program            启用程序（glUseProgram）
+;;   use-program            启用程序（gl-use-program）
 ;;
 ;; 数据
-;;   glGenBuffers           开缓冲对象，拿编号（VBO）
-;;   glBindBuffer           设为"当前缓冲"（GL_ARRAY_BUFFER = 顶点属性缓冲）
-;;   glBufferData           把数据拷进当前缓冲（GL_STATIC_DRAW = 基本不变）
-;;   glGenVertexArrays      开 VAO 对象，拿编号
-;;   glBindVertexArray      设为"当前 VAO"
-;;   glVertexAttribPointer  描述某槽号的数据布局（类型/分量数/步长/偏移）
-;;   glEnableVertexAttribArray  启用某槽号
+;;   gl-gen-buffers           开缓冲对象，拿编号（VBO）
+;;   gl-bind-buffer           设为"当前缓冲"（gl-array-buffer = 顶点属性缓冲）
+;;   gl-buffer-data           把数据拷进当前缓冲（gl-static-draw = 基本不变）
+;;   gl-gen-vertex-arrays      开 VAO 对象，拿编号
+;;   gl-bind-vertex-array      设为"当前 VAO"
+;;   gl-vertex-attrib-pointer  描述某槽号的数据布局（类型/分量数/步长/偏移）
+;;   gl-enable-vertex-attrib-array  启用某槽号
 ;;
 ;; 画
-;;   glClearColor           记住清屏色
-;;   glClear                擦缓冲（GL_COLOR_BUFFER_BIT = 颜色缓冲）
-;;   glViewport             把 -1..1 映射到像素矩形
-;;   glDrawArrays           画顶点（GL_TRIANGLES = 每 3 个一组三角形）
+;;   gl-clear-color           记住清屏色
+;;   gl-clear                擦缓冲（gl-color-buffer-bit = 颜色缓冲）
+;;   gl-viewport             把 -1..1 映射到像素矩形
+;;   gl-draw-arrays           画顶点（gl-triangles = 每 3 个一组三角形）
 ;;   swap-gl-buffers        双缓冲翻页
 ;;
 ;; 数据构造（racket-glsl/rename-vector.rkt）
@@ -206,8 +206,8 @@
 ;;
 ;; 状态机 = 连接两台机器的"当前指针"：
 ;;   状态就是"当前用哪套东西"（当前程序 / 当前缓冲 / 当前 VAO）。
-;;   设状态：glBind*、glUseProgram、with-gl-context（进入上下文）
-;;   用状态执行：glBufferData、glDrawArrays、glClear
+;;   设状态：gl-bind-*、gl-use-program、with-gl-context（进入上下文）
+;;   用状态执行：gl-buffer-data、gl-draw-arrays、gl-clear
 ;;   上下文 = 一整份状态的容器；一块画布一个上下文。
 ;;
 ;; 把画三角形的所有函数，按"五块逻辑"归类（对照着读第 5 节）：
@@ -218,19 +218,19 @@
 ;;
 ;;   ② 建 GPU 对象（在显存里开对象，CPU 只拿编号）
 ;;        compile-shader / link-program / build-program → 着色器、程序
-;;        glGenBuffers / glGenVertexArrays              → VBO、VAO
+;;        gl-gen-buffers / gl-gen-vertex-arrays              → VBO、VAO
 ;;
 ;;   ③ 传数据 + 描述（过 PCIe，进显存）
-;;        glBufferData                                    → 顶点批量进 VBO
-;;        glVertexAttribPointer / glEnableVertexAttribArray → VAO 切片手册
+;;        gl-buffer-data                                    → 顶点批量进 VBO
+;;        gl-vertex-attrib-pointer / gl-enable-vertex-attrib-array → VAO 切片手册
 ;;
 ;;   ④ 设状态（状态机，指定"当前用哪套"）
-;;        glBindBuffer / glBindVertexArray / use-program / with-gl-context
+;;        gl-bind-buffer / gl-bind-vertex-array / use-program / with-gl-context
 ;;
 ;;   ⑤ 执行 + 显示（GPU 干活 + 翻页）
-;;        glDrawArrays                                    → 并行跑着色器
-;;        glClearColor / glClear / glViewport / swap-gl-buffers → 清屏/映射/翻页
+;;        gl-draw-arrays                                    → 并行跑着色器
+;;        gl-clear-color / gl-clear / gl-viewport / swap-gl-buffers → 清屏/映射/翻页
 ;;
 ;; 一句话记住 OpenGL：CPU 在内存里造数据、一次批量搬进显存、用状态机指定
-;; "当前用哪套"，然后一条 glDrawArrays 让 GPU 并行跑着色器，最后翻页显示。
+;; "当前用哪套"，然后一条 gl-draw-arrays 让 GPU 并行跑着色器，最后翻页显示。
 ;; =========================================================

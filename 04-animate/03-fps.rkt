@@ -40,9 +40,9 @@
 (define (draw)
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
   (use-program prog)
-  (glUniform1f loc-time t)
-  (glBindVertexArray vao)
-  (glDrawArrays GL_TRIANGLES 0 3)
+  (gl-uniform-1f loc-time t)
+  (gl-bind-vertex-array vao)
+  (gl-draw-arrays gl-triangles 0 3)
   ;; ── 数帧 + 算 FPS ──
   (set! frame-count (add1 frame-count))
   (define now (current-inexact-milliseconds))
@@ -59,21 +59,21 @@
 ;; 初始化（同 02）。
 (define prog
   (send canvas with-gl-context
-    (lambda () (build-program (GL_VERTEX_SHADER vert-src) (GL_FRAGMENT_SHADER frag-src)))))
+    (lambda () (build-program (gl-vertex-shader vert-src) (gl-fragment-shader frag-src)))))
 (define loc-time
   (send canvas with-gl-context (lambda () (uniform-location prog "uTime"))))
 (define vao
   (send canvas with-gl-context
     (lambda ()
       (define data (vec->f32vector verts))
-      (define vbo (u32vector-ref (glGenBuffers 1) 0))
-      (glBindBuffer GL_ARRAY_BUFFER vbo)
-      (glBufferData GL_ARRAY_BUFFER (gl-vector-sizeof data) data GL_STATIC_DRAW)
-      (define v (u32vector-ref (glGenVertexArrays 1) 0))
-      (glBindVertexArray v)
-      (glVertexAttribPointer 0 2 GL_FLOAT #f 8 0)
-      (glEnableVertexAttribArray 0)
-      (glBindVertexArray 0)
+      (define vbo (u32vector-ref (gl-gen-buffers 1) 0))
+      (gl-bind-buffer gl-array-buffer vbo)
+      (gl-buffer-data gl-array-buffer (gl-vector-sizeof data) data gl-static-draw)
+      (define v (u32vector-ref (gl-gen-vertex-arrays 1) 0))
+      (gl-bind-vertex-array v)
+      (gl-vertex-attrib-pointer 0 2 gl-float #f 8 0)
+      (gl-enable-vertex-attrib-array 0)
+      (gl-bind-vertex-array 0)
       v)))
 
 (define ticker
