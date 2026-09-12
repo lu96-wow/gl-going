@@ -2,12 +2,17 @@
 ;; =========================================================
 ;; lib.rkt —— GL/GLSL 工具库（第一版）
 ;;
-;; 本课新建：build-program 当黑盒用（把两段着色器编译链接成一个程序；
-;;   内部 03 课 03/04/06 步拆开细讲）。
+;; 本文件从 03-pipeline 复制：build-program 直接当黑盒用
+;;   （编译 + 链接的通用版；03 课 06 步收进 lib，本课先用起来）。
 ;; 02-triangle/02-vbo.rkt 一步添加：
 ;;   转发 rename-vector —— 拿到 vec2/vec3/vec4 构造器和 concat-vecs
 ;;   （顶点数据统一用 vec2 写，不再裸写 f32vector）。
 ;; 后面每一课会复制本文件，并在需要时往里加功能。
+;; =========================================================
+;;
+;; 本课（05-animate）从 04-glsl-types 原样复制，未改动：
+;;   uniform/timer 的 glGetUniformLocation、glUniform1f、timer% 都是
+;;   gl*/GUI 标准调用，直接内联在步骤文件里，不需要收进 lib。
 ;; =========================================================
 
 (require opengl ffi/vector)                  ; gl* 常量；s32vector（glShaderSource 用）

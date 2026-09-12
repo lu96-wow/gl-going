@@ -2,12 +2,10 @@
 ;; =========================================================
 ;; lib.rkt —— GL/GLSL 工具库（第一版）
 ;;
-;; 本课新建：build-program 当黑盒用（把两段着色器编译链接成一个程序；
-;;   内部 03 课 03/04/06 步拆开细讲）。
-;; 02-triangle/02-vbo.rkt 一步添加：
-;;   转发 rename-vector —— 拿到 vec2/vec3/vec4 构造器和 concat-vecs
-;;   （顶点数据统一用 vec2 写，不再裸写 f32vector）。
-;; 后面每一课会复制本文件，并在需要时往里加功能。
+;; 本文件从 02-triangle 复制；本课 03/04/06 步把 build-program 拆开重写：
+;;   03 步裸写 compile-shader，04 步裸写 link-program，06 步收成“任意阶段”通用版
+;;   （每段 = (阶段类型 源码)，一次可编译链接 顶点+细分+几何+片元 任意组合）。
+;; 其余（shader-info-log / program-info-log）与 02 相同。
 ;; =========================================================
 
 (require opengl ffi/vector)                  ; gl* 常量；s32vector（glShaderSource 用）
@@ -18,7 +16,7 @@
          (all-from-out "../racket-glsl/rewrite.rkt")        ; (glsl ...) 宏、glsl-pretty
          (all-from-out "../racket-glsl/rename-vector.rkt")) ; vec2…、concat-vecs、f32vector…
 
-;; 把一段 GLSL 文本编译成一个"着色器对象"（03 课 03 步裸写讲的原始过程）
+;; 把一段 GLSL 文本编译成一个"着色器对象"（本课 03 步裸写讲的原始过程）
 ;; 取着色器信息日志（编译失败时打印，帮读者定位错误行）
 (define (shader-info-log shader)
   (define len (glGetShaderiv shader GL_INFO_LOG_LENGTH))
