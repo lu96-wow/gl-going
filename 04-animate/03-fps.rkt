@@ -39,6 +39,8 @@
 
 (define (draw)
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
+  (gl-clear-color 0.10 0.12 0.20 1.0)
+  (gl-clear gl-color-buffer-bit)
   (use-program prog)
   (gl-uniform-1f loc-time t)
   (gl-bind-vertex-array vao)

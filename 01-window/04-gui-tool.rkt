@@ -2,8 +2,8 @@
 ;; =========================================================
 ;; 01-window/04-gui-tool.rkt —— 窗口骨架工具
 ;; =========================================================
-;; 把前 3 步（01 窗口 / 02 上下文 / 03 清屏）收成一个函数 make-window。
-;; 之后每课只要三行：
+;; 把前 2 步（01 窗口 / 02 上下文）的样板收成一个函数 make-window，
+;; 再加上 03 步学到的"翻页"骨架。之后每课只要三行：
 ;;   (require "04-gui-tool.rkt")
 ;;   (define-values (frame canvas) (make-window #:title "..." #:draw draw))
 ;;   (send frame show #t)
@@ -11,8 +11,11 @@
 ;; make-window 帮你做四件事：
 ;;   ① 配好 GL 上下文（core profile + 双缓冲）
 ;;   ② 建好"点 X 退出"的窗口
-;;   ③ 建好画布，每帧自动：清屏 → 调你的 #:draw → 翻页
+;;   ③ 建好画布，每次重绘自动：进入上下文 → 调你的 #:draw → 翻页
 ;;   ④ 把 frame、canvas 两个对象交还给你（不自动 show，见文件末尾）
+;;
+;; ★清屏不在这里：清屏是"画"的第一步（03 步讲过），属于 #:draw 的内容。
+;;   所以每课的 draw 都自己写：先 gl-clear-color + gl-clear，再画别的。
 ;; =========================================================
 
 (require racket/gui "../racket-glsl/opengl-rename.rkt")
@@ -20,8 +23,8 @@
          (all-from-out racket/gui)   ; frame% canvas% 等
          (all-from-out "../racket-glsl/opengl-rename.rkt"))   ; gl-* 函数与常量
 
-;; #:title 窗口标题；#:width/#:height 窗口大小；#:draw 每帧画什么（可选，不给就只清屏）。
-;; 注意：你的 #:draw 会在 GL 上下文里被调用，里面可以直接写 gl-* 调用。
+;; #:title 窗口标题；#:width/#:height 窗口大小；#:draw 每次重绘画什么。
+;; 注意：你的 #:draw 会在 GL 上下文里被调用，里面记得先清屏再画内容。
 (define (make-window #:title title
                      #:draw [draw void]
                      #:width [w 400]
@@ -31,16 +34,15 @@
     (class frame%
       (augment* [on-close (lambda () (exit 0))])
       (super-new)))
-  ;; 画布类：每帧 清屏 → draw → 翻页（同 03 步）
+  ;; 画布类：每次重绘 进入上下文 → draw → 翻页（同 03 步的骨架）。
+  ;; 清屏不在工具里，而在 draw 里（draw = 清屏 + 画内容）。
   (define gl-canvas%
     (class canvas%
       (inherit with-gl-context swap-gl-buffers)
       (define/override (on-paint)
         (with-gl-context
          (lambda ()
-           (gl-clear-color 0.10 0.12 0.20 1.0)  ; 清屏色（深蓝灰）
-           (gl-clear gl-color-buffer-bit)
-           (draw)                              ; 你的每帧内容
+           (draw)                              ; 你的每帧内容（含清屏）
            (send this swap-gl-buffers))))
       (super-new)))
   ;; 上下文配置（同 02 步）

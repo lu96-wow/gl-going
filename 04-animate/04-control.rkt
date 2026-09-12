@@ -50,6 +50,8 @@
 ;; 每帧画的内容（同 02）。
 (define (draw)
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
+  (gl-clear-color 0.10 0.12 0.20 1.0)  ; 清屏（draw 自己负责）
+  (gl-clear gl-color-buffer-bit)
   (use-program prog)
   (gl-uniform-1f loc-time t)
   (gl-bind-vertex-array vao)
@@ -62,7 +64,7 @@
          (super-new))
        (label "04-04 运行中（空格暂停）") (width 400) (height 400)))
 
-;; 上下文配置 + 画布（同 02 课：on-size 视口 + on-paint 清屏/画/翻页）。
+;; 上下文配置 + 画布（同 02 课：on-size 视口 + on-paint 画/翻页）。
 (define cfg (new gl-config%))
 (send cfg set-legacy? #f)          ; core profile
 (send cfg set-double-buffered #t)  ; 双缓冲
@@ -81,8 +83,6 @@
          (define/override (on-paint)
            (with-gl-context
             (lambda ()
-              (gl-clear-color 0.10 0.12 0.20 1.0)
-              (gl-clear gl-color-buffer-bit)
               (draw)
               (send this swap-gl-buffers))))
          (super-new))

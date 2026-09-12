@@ -32,8 +32,10 @@
        (vec2  0.5 -0.5)
        (vec2  0.0  0.5)))
 
-;; 每帧画什么。注意：make-window 已自动"清屏"，这里只画内容。
+;; 每帧画什么：先清屏，再画三角形。清屏由 draw 自己负责（make-window 只给骨架）。
 (define (draw)
+  (gl-clear-color 0.10 0.12 0.20 1.0)  ; 清屏（03 步：先记色，再擦）
+  (gl-clear gl-color-buffer-bit)
   (use-program prog)          ; 用哪个程序
   (gl-bind-vertex-array vao)     ; 绑上 VAO（拿到"数据说明书"）
   ;; gl-triangles = 每 3 个顶点一组三角形；从第 0 个顶点起，画 3 个

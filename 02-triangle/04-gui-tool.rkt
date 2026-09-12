@@ -6,10 +6,10 @@
 ;;   视口处理（on-size + gl-viewport）。
 ;;
 ;; 为什么本课才加：视口决定"-1..1 的坐标"映射到哪个像素矩形。
-;;   01 课只清屏，gl-clear 清的是整块缓冲、与视口无关，所以不需要；
+;;   01 课只清屏，gl-clear 清的是整块缓冲、与视口无关，所以不需要视口；
 ;;   本课开始画几何（三角形），几何要按视口定位——不设视口，三角形会被裁掉。
 ;;
-;; 其余（上下文 / 点 X 退出 / 清屏 / 翻页）与 01 相同。
+;; 其余（上下文 / 点 X 退出 / 进入上下文 → draw → 翻页）与 01 相同。
 ;; =========================================================
 
 (require racket/gui "../racket-glsl/opengl-rename.rkt")
@@ -39,13 +39,11 @@
          (lambda ()
            (define-values (fw fh) (send this get-gl-client-size))
            (gl-viewport 0 0 fw fh))))
-      ;; on-paint：每帧 清屏 → draw → 翻页
+      ;; on-paint：每次重绘 进入上下文 → draw → 翻页（清屏在 draw 里）
       (define/override (on-paint)
         (with-gl-context
          (lambda ()
-           (gl-clear-color 0.10 0.12 0.20 1.0)  ; 清屏色（深蓝灰）
-           (gl-clear gl-color-buffer-bit)
-           (draw)                              ; 你的每帧内容
+           (draw)                              ; 你的每帧内容（含清屏）
            (send this swap-gl-buffers))))
       (super-new)))
   ;; 上下文配置

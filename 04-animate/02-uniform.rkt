@@ -59,6 +59,8 @@
 ;; 注意顺序：gl-uniform-1f 必须在 use-program 之后（uniform 位置属于某个程序）。
 (define (draw)
   (define t (/ (- (current-inexact-milliseconds) start-ms) 1000.0))
+  (gl-clear-color 0.10 0.12 0.20 1.0)  ; 清屏（draw 自己负责）
+  (gl-clear gl-color-buffer-bit)
   (use-program prog)
   (gl-uniform-1f loc-time t)
   (gl-bind-vertex-array vao)

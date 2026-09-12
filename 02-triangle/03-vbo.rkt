@@ -89,4 +89,4 @@
       v)))
 
 (printf "3 个顶点已上传，VAO 已记录：0 号槽 = 每顶点 2 个 float\n")
-;; 本步还不画，画面是清屏色；下一步 gl-draw-arrays 才真正画出来。
+;; 本步还不画；下一步 gl-draw-arrays 才真正画出来。
