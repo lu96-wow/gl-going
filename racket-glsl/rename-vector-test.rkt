@@ -148,4 +148,30 @@
 ;; 空 struct → 报错
 (check-exn exn:fail? (lambda () (eval '(glsl-struct Empty))))
 
+;; ---------- concat-dvecs：double 拼装 ----------
+(check-equal? (ld (concat-dvecs (dvec2 1.0 2.0) (dvec3 3.0 4.0 5.0)))
+              '(1.0 2.0 3.0 4.0 5.0))
+(check-equal? (ld (concat-dvecs)) '())
+(define ddst (make-f64vector 6 0.0))
+(check-equal? (concat-dvecs! ddst (list (dvec3 1.0 2.0 3.0) (dvec2 4.0 5.0))) 5)
+(check-equal? (ld ddst) '(1.0 2.0 3.0 4.0 5.0 0.0))
+
+;; ---------- glsl-struct：double 字段 → ->f64vector ----------
+(glsl-struct dparticle
+  (dvec3 position)
+  (dvec2 velocity)
+  (double mass))
+(check-equal? (ld (dparticle->f64vector
+                   (dparticle (dvec3 1.0 2.0 3.0) (dvec2 0.5 0.25) 0.125)))
+              '(1.0 2.0 3.0 0.5 0.25 0.125))
+(check-equal? (dparticle-stride) 48)   ; 24 + 16 + 8
+(check-equal? (dparticle-field-offset 'position) 0)
+(check-equal? (dparticle-field-offset 'velocity) 24)
+(check-equal? (dparticle-field-offset 'mass) 40)
+(check-equal? (dparticle-field-size 'mass) 1)
+(check-exn exn:fail? (lambda () (dparticle-field-offset 'nope)))
+
+;; 混用 float/double 字段 → 宏展开时报错（不是运行时报错）
+(check-exn exn:fail? (lambda () (eval '(glsl-struct mixed-vertex (vec3 a) (dvec3 b)))))
+
 (displayln "rename-vector 全部测试通过")

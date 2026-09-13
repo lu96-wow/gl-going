@@ -25,6 +25,8 @@
 ;; 用法：require 本模块后，代码里只写 kebab-case 的 gl-* 名字；
 ;;       原始驼峰名不再直接出现在教程代码里。
 ;;       需要某个还没收录的函数/常量时，按上面三条规则把它补进下面两段。
+;; double 精度（dvec/dmat/double）的专属函数也已收录：GL 4.0+ 的 gl-uniform-*d、
+;; GL 4.1+ 的 gl-vertex-attrib-l-*。教程主线用 float，这些先备着。
 ;; ============================================================
 
 (require opengl)
@@ -54,13 +56,26 @@
  gl-link-program
  gl-shader-source
  gl-uniform-1f
+ gl-uniform-1d
+ gl-uniform-2d
+ gl-uniform-3d
+ gl-uniform-4d
+ gl-uniform-matrix-2dv
+ gl-uniform-matrix-3dv
+ gl-uniform-matrix-4dv
  gl-use-program
  gl-vertex-attrib-pointer
+ gl-vertex-attrib-l-pointer
+ gl-vertex-attrib-l-1d
+ gl-vertex-attrib-l-2d
+ gl-vertex-attrib-l-3d
+ gl-vertex-attrib-l-4d
  gl-viewport
  ;; ---------- 常量 ----------
  gl-array-buffer
  gl-color-buffer-bit
  gl-compile-status
+ gl-double
  gl-dynamic-draw
  gl-float
  gl-fragment-shader
@@ -101,8 +116,20 @@
 (define gl-link-program             glLinkProgram)
 (define gl-shader-source            glShaderSource)
 (define gl-uniform-1f               glUniform1f)
+(define gl-uniform-1d               glUniform1d)
+(define gl-uniform-2d               glUniform2d)
+(define gl-uniform-3d               glUniform3d)
+(define gl-uniform-4d               glUniform4d)
+(define gl-uniform-matrix-2dv       glUniformMatrix2dv)
+(define gl-uniform-matrix-3dv       glUniformMatrix3dv)
+(define gl-uniform-matrix-4dv       glUniformMatrix4dv)
 (define gl-use-program              glUseProgram)
 (define gl-vertex-attrib-pointer    glVertexAttribPointer)
+(define gl-vertex-attrib-l-pointer  glVertexAttribLPointer)
+(define gl-vertex-attrib-l-1d       glVertexAttribL1d)
+(define gl-vertex-attrib-l-2d       glVertexAttribL2d)
+(define gl-vertex-attrib-l-3d       glVertexAttribL3d)
+(define gl-vertex-attrib-l-4d       glVertexAttribL4d)
 (define gl-viewport                 glViewport)
 
 ;; ---------- 常量：全大写下划线 → kebab-case ----------
@@ -110,6 +137,7 @@
 (define gl-array-buffer            GL_ARRAY_BUFFER)
 (define gl-color-buffer-bit        GL_COLOR_BUFFER_BIT)
 (define gl-compile-status          GL_COMPILE_STATUS)
+(define gl-double                  GL_DOUBLE)
 (define gl-dynamic-draw            GL_DYNAMIC_DRAW)
 (define gl-float                   GL_FLOAT)
 (define gl-fragment-shader         GL_FRAGMENT_SHADER)

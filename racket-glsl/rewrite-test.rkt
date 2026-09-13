@@ -158,3 +158,21 @@
                                             (layout (offset 64) mat4 proj)) cam)))
 (check-glsl "out V { flat vec3 normal; vec2 uv; } vs_out;"
             ((out (block V (flat vec3 normal) (vec2 uv)) vs_out)))
+
+;; ---------- double 精度类型（dvec/dmat/double）----------
+(check-glsl "#version 400 core\n in dvec3 aPos;"
+            ((version 400 core) (in dvec3 aPos)))
+(check-glsl "uniform double uTime;"
+            ((uniform double uTime)))
+(check-glsl "void main() { dvec3 p = dvec3(vUV, 0.5); }"
+            ((define (main) void (dvec3 p (dvec3 vUV 0.5)))))
+(check-glsl "void main() { dmat4 m = dmat4(1.0); }"
+            ((define (main) void (dmat4 m (dmat4 1.0)))))
+;; double 字面量：raw 逃生舱（GLSL 里 1.5 是 float，1.5lf 才是 double）
+(check-glsl "void main() { double x = 1.5lf; }"
+            ((define (main) void (double x (raw "1.5lf")))))
+;; double ↔ float 显式转换（GLSL 不隐式转）
+(check-glsl "void main() { float f = float(d); }"
+            ((define (main) void (float f (float d)))))
+(check-glsl "void main() { double d = double(f); }"
+            ((define (main) void (double d (double f)))))

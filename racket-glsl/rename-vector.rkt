@@ -14,6 +14,10 @@
 ;;   - 标量（float/int/uint/bool/double）直接就是 Racket 数，不重定义，避免遮蔽 Racket 内置。
 ;;   - struct：glsl-struct 把 GLSL 的 struct（具名字段）镜像到 CPU 侧，
 ;;     一并生成铺平 / stride / offset / size（供 VBO + glVertexAttribPointer 用）。
+;;   - double 系（dvec/dmat/double）的版本线：类型 + uniform 需 GL 4.0 / GLSL 4.00
+;;     （3.30 用 GL_ARB_gpu_shader_fp64 扩展）；顶点属性需 GL 4.1 / GLSL 4.10
+;;     （glVertexAttribLPointer，GL_ARB_vertex_attrib_64bit）。pack / glsl-struct
+;;     精度对称：全 float → f32vector、全 double → f64vector，混合报错。
 ;;   - 精度是 GLSL 命名轴上的选择：vec→f32vector，dvec→f64vector。别名透明，
 ;;     结果是货真价实的 ffi/vector，随时可用 ffi/vector 的 API（本模块已 all-from-out 转发）。
 ;;   - 列主序约定：GLSL mat/dmat 与 ffi/vector 的列主序展开一致，直接转、不转置。
@@ -43,8 +47,9 @@
          ;; 矩阵构造器（全形式分派）
          mat2 mat3 mat4
          dmat2 dmat3 dmat4
-         ;; 拼装：把多个 vec（f32vector）连成一个连续缓冲
+         ;; 拼装：把多个 vec/dvec（f32vector/f64vector）连成一个连续缓冲
          concat-vecs concat-vecs!
+         concat-dvecs concat-dvecs!
          ;; vec：n 个同型向量的缓冲（静态/动态顶点数据）
          vec make-vec vec? vec-count vec-width vec-ref vec-set! vec->f32vector
          ;; GLSL struct：具名字段，与 shader 的 (struct ...) 对齐
@@ -118,6 +123,22 @@
   (define total (for/sum ([v vs]) (f32vector-length v)))
   (define out (make-f32vector total 0.0))
   (concat-vecs! out vs)
+  out)
+
+;; double 版：把多个 dvec（f64vector）连成一个**新**连续缓冲。
+;; 给 double 顶点数据（dvec3 位置 / dvec4 齐次坐标等）拼 VBO 用。
+(define (concat-dvecs! dst vs)
+  (define i 0)
+  (for ([v vs])
+    (for ([j (in-range (f64vector-length v))])
+      (f64vector-set! dst i (f64vector-ref v j))
+      (set! i (add1 i))))
+  i)
+
+(define (concat-dvecs . vs)
+  (define total (for/sum ([v vs]) (f64vector-length v)))
+  (define out (make-f64vector total 0.0))
+  (concat-dvecs! out vs)
   out)
 
 ;; ---------- vec：n 个同型向量的缓冲 ----------
@@ -278,22 +299,43 @@
 (define (glsl-stride-bytes . types)
   (apply + (map glsl-byte-size types)))
 
-;; 低层原语：按类型清单把字段值铺成一条交错的 f32 记录（标量字段直接给数）。
+;; 精度判断：double 族（double/dvec*/dmat*）→ f64；float 族 → f32。
+(define double-family '(double dvec2 dvec3 dvec4 dmat2 dmat3 dmat4))
+(define (double-type? t) (and (memq t double-family) #t))
+
+;; 低层原语：按类型清单把字段值铺成一条交错的记录（标量字段直接给数）。
 ;; 一般不要直接用——用 glsl-struct（具名字段）表达交错记录，它内部调 pack。
-;; 注：pack 面向 float 顶点数据（标量字段 = float，给 flonum；向量字段给 vec/mat）。
+;; 精度对称：字段类型全 float → f32vector；全 double → f64vector；混用 → 报错。
 (define (pack types . fields)
   (unless (= (length types) (length fields))
     (error 'pack "字段数与类型清单不一致：~a 个字段 vs ~a 个类型" (length fields) (length types)))
-  (apply concat-vecs
-         (for/list ([t (in-list types)] [f (in-list fields)])
-           (define n (glsl-size t))
-           (cond
-             [(= n 1) (f32vector (check-float 'pack f))]   ; 标量字段（float）
-             [(f32vector? f)
-              (unless (= (f32vector-length f) n)
-                (error 'pack "字段 ~s 应为长度 ~a 的向量，实际 ~a" t n (f32vector-length f)))
-              f]
-             [else (error 'pack "字段 ~s 应为标量（flonum）或 f32 向量，实际 ~s" t f)]))))
+  (define all-double? (andmap double-type? types))
+  (define any-double? (ormap double-type? types))
+  (when (and any-double? (not all-double?))
+    (error 'pack "交错缓冲不能混用 float/double 精度：~s" types))
+  (if all-double?
+      ;; double 记录：f64vector（标量字段给 flonum；向量字段给 dvec/dmat = f64vector）
+      (apply concat-dvecs
+             (for/list ([t (in-list types)] [f (in-list fields)])
+               (define n (glsl-size t))
+               (cond
+                 [(= n 1) (f64vector (check-float 'pack f))]
+                 [(f64vector? f)
+                  (unless (= (f64vector-length f) n)
+                    (error 'pack "字段 ~s 应为长度 ~a 的 f64 向量，实际 ~a" t n (f64vector-length f)))
+                  f]
+                 [else (error 'pack "字段 ~s 应为标量（flonum）或 f64 向量，实际 ~s" t f)])))
+      ;; float 记录：f32vector（标量字段给 flonum；向量字段给 vec/mat = f32vector）
+      (apply concat-vecs
+             (for/list ([t (in-list types)] [f (in-list fields)])
+               (define n (glsl-size t))
+               (cond
+                 [(= n 1) (f32vector (check-float 'pack f))]
+                 [(f32vector? f)
+                  (unless (= (f32vector-length f) n)
+                    (error 'pack "字段 ~s 应为长度 ~a 的 f32 向量，实际 ~a" t n (f32vector-length f)))
+                  f]
+                 [else (error 'pack "字段 ~s 应为标量（flonum）或 f32 向量，实际 ~s" t f)])))))
 
 ;; 低层原语：交错布局里每个字段的字节偏移（glsl-struct 内部用）：
 ;;   (glsl-field-offsets '(vec3 vec3 float)) → '(0 12 24)
@@ -309,7 +351,7 @@
 ;;   (glsl-struct instance (vec3 offset) (vec3 color) (float phase))
 ;; 生成：
 ;;   - Racket struct：instance（构造器，与 GLSL 的 struct 构造器同名）/ instance? / instance-offset / ...
-;;   - (instance->f32vector rec)  铺平成交错 f32vector（喂 VBO）
+;;   - (instance->f32vector rec)  铺平成交错 f32vector（喂 VBO）；字段全 double 时生成 ->f64vector
 ;;   - (instance-stride)          总字节步长
 ;;   - (instance-field-offset 'x) 字段字节偏移（给 glVertexAttribPointer）
 ;;   - (instance-field-size   'x) 字段分量数（给 glVertexAttribPointer 的 size）
@@ -319,13 +361,20 @@
 (define-syntax (glsl-struct stx)
   (syntax-case stx ()
     [(_ Name (type field) ...)
-     (let* ([types  (syntax->list #'(type ...))]
-            [fields (syntax->list #'(field ...))])
+     (let* ([types     (syntax->list #'(type ...))]
+            [fields    (syntax->list #'(field ...))]
+            [type-syms (map syntax->datum types)]
+            [double?   (lambda (t) (memq t '(double dvec2 dvec3 dvec4 dmat2 dmat3 dmat4)))]
+            [all-double? (andmap double? type-syms)]
+            [any-double? (ormap double? type-syms)])
        (when (null? fields)
          (error 'glsl-struct "至少需要一个字段"))
+       (when (and any-double? (not all-double?))
+         (error 'glsl-struct "字段不能混用 float/double 精度：~s" type-syms))
+       (define pack-fmt (if all-double? "~a->f64vector" "~a->f32vector"))
        (with-syntax
-         ([types-list   (datum->syntax #'Name (map syntax->datum types))]
-          [to-f32       (format-id #'Name "~a->f32vector" #'Name)]
+         ([types-list   (datum->syntax #'Name type-syms)]
+          [to-vec       (format-id #'Name pack-fmt #'Name)]
           [stride-fn    (format-id #'Name "~a-stride" #'Name)]
           [field-offset (format-id #'Name "~a-field-offset" #'Name)]
           [field-size   (format-id #'Name "~a-field-size" #'Name)]
@@ -336,7 +385,7 @@
              #`[(#,f) #,i])])
          #'(begin
              (struct Name (field ...) #:transparent)
-             (define (to-f32 rec)
+             (define (to-vec rec)
                (pack 'types-list (field-acc rec) ...))
              (define (stride-fn)
                (apply glsl-stride-bytes 'types-list))
