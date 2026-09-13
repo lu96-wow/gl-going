@@ -70,10 +70,26 @@
       ;; gl-bind-vertex-array：绑定 VAO——之后所有切片规则都记在它上面。
       (gl-bind-vertex-array v)
 
-      ;; 回想 01-shader.rkt：shader 里 (layout (location 0) in vec2 aPos)
-      ;; 声明"0 号槽 = 一个 vec2 位置"。这里用同一个号码 0 对齐。
-      ;; gl-vertex-attrib-pointer(0, ...) = "0 号槽的数据长这样"，参数逐一看：
-      ;;   0        —— 槽号（对应 shader 的 location 0）
+      ;; ── ★数据与 location 是怎么关联起来的？（联系 01-shader.rkt 一起看）──
+      ;; 关键：location 号本身**不存数据**，它是"频道号"，是连接 CPU 和 shader 的
+      ;; 唯一接线端子。数据在 VBO，读法在 VAO，频道号把两者对给 shader：
+      ;;
+      ;;   shader 里  (layout (location 0) in vec2 aPos)
+      ;;               说："变量 aPos 读 0 号频道"（编译进程序对象）
+      ;;   这里      (gl-vertex-attrib-pointer 0 ...)
+      ;;               说："0 号频道 = 从【当前绑定的 VBO】按下面布局切数据"
+      ;;               ★这一句会顺带记住"当前绑定的 VBO"——所以前面必须先 bind VBO
+      ;;
+      ;; 于是画的时候（gl-draw-arrays），输入装配器自动做：
+      ;;   "aPos 要读 0 号频道" → 查 VAO 里 0 号频道那行 → 拿到 VBO + 切法
+      ;;   → 对第 i 个顶点，从 VBO 第 (i×stride + offset) 字节切出数据 → 喂给 aPos。
+      ;;
+      ;; 所以"数据与 location 关联"靠的就是同一个数字 0：CPU 和 shader 各写一遍，
+      ;; 号码对上就接通，对不上 aPos 就接不到数据（读到默认值 0）。
+      ;; 本步只有位置一个属性，所以只有一个频道；后面加 uv 就是再加一个频道 1。
+      ;;
+      ;; gl-vertex-attrib-pointer(0, ...) = "0 号频道的数据长这样"，参数逐一看：
+      ;;   0        —— 频道号（对应 shader 的 location 0，两边的胶水）
       ;;   2        —— 每个属性 2 个分量（x、y）
       ;;   gl-float —— 每个分量的类型是 float（GL 常量）
       ;;   #f       —— 不归一化（float 数据不需要；整数数据要归一化到 0~1 才用 #t）
