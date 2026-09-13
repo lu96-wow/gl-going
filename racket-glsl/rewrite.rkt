@@ -206,6 +206,8 @@
           (list 'glsl-if (rw-expr (car args)) (rw-body (cdr args)))]
          [(eq? head 'unless)
           (list 'glsl-if (list 'glsl-unary "!" (rw-expr (car args))) (rw-body (cdr args)))]
+         [(eq? head 'if)
+          (error 'glsl "if 是表达式（三元 ?:）；语句位置的分支请用 when / unless / cond：~s" s)]
          [(eq? head 'cond) (rw-cond args)]
          [(eq? head 'for)
           (list 'glsl-for (rw-decl (car args))
@@ -236,6 +238,9 @@
           (define-values (quals after) (collect-quals s))
           (unless (and (pair? after) (pair? (cdr after)))
             (error 'glsl "bad declaration：缺少类型或变量名 ~s" s))
+          ;; 声明只能是一个变量：(类型 名字 [初值])；多变量/坏形状给清晰报错
+          (unless (and (symbol? (cadr after)) (<= (length after) 3))
+            (error 'glsl "bad declaration：~s（应为 (类型 名字 [初值]) 单变量）" s))
           (define ty (rw-type (car after)))
           (define nm (symbol->string (cadr after)))
           (if (null? (cddr after))
@@ -292,7 +297,9 @@
         [(null? fs) (values (map symbol->string (reverse acc)) '())]
         [(glsl-type? (car fs))
          (values (map symbol->string (reverse acc)) fs)]
-        [else (loop (cdr fs) (cons (car fs) acc))])))
+        [(symbol? (car fs))
+         (loop (cdr fs) (cons (car fs) acc))]
+        [else (error 'glsl "bad declaration：~s 既不是限定符也不是类型" (car fs))])))
 
   ;; 接口块字段 → 字符串："mat4 view;" / "flat vec3 n;" / "layout(offset = 0) mat4 view;"
   (define (field->str f)

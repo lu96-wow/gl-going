@@ -14,10 +14,8 @@
 ;;   - 标量（float/int/uint/bool/double）直接就是 Racket 数，不重定义，避免遮蔽 Racket 内置。
 ;;   - struct：glsl-struct 把 GLSL 的 struct（具名字段）镜像到 CPU 侧，
 ;;     一并生成铺平 / stride / offset / size（供 VBO + glVertexAttribPointer 用）。
-;;   - double 系（dvec/dmat/double）的版本线：类型 + uniform 需 GL 4.0 / GLSL 4.00
-;;     （3.30 用 GL_ARB_gpu_shader_fp64 扩展）；顶点属性需 GL 4.1 / GLSL 4.10
-;;     （glVertexAttribLPointer，GL_ARB_vertex_attrib_64bit）。pack / glsl-struct
-;;     精度对称：全 float → f32vector、全 double → f64vector，混合报错。
+;;   - double 系（dvec/dmat/double）与 float 系精度对称：pack / glsl-struct 全 float →
+;;     f32vector、全 double → f64vector，混合报错。
 ;;   - 精度是 GLSL 命名轴上的选择：vec→f32vector，dvec→f64vector。别名透明，
 ;;     结果是货真价实的 ffi/vector，随时可用 ffi/vector 的 API（本模块已 all-from-out 转发）。
 ;;   - 列主序约定：GLSL mat/dmat 与 ffi/vector 的列主序展开一致，直接转、不转置。

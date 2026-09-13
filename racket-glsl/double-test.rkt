@@ -19,9 +19,7 @@
 (define frame (new frame% (label "double-test")))
 (define canvas (new canvas% (style '(gl no-autoclear)) (gl-config cfg) (parent frame)))
 
-;; double 着色器：注意版本线——
-;;   double/dvec/dmat 类型 + double uniform（glUniform*d）：GLSL 4.00 / GL 4.0
-;;   dvec/dmat 顶点属性（glVertexAttribLPointer）：GLSL 4.10 / GL 4.1
+;; double 着色器：机器是 GL 4.5，double 系类型可用（顶点属性需较新 GLSL）。
 (define vert-src
   (glsl (version 410 core)
         (layout (location 0) in dvec3 aPos)     ; double 精度顶点属性（4.10+）

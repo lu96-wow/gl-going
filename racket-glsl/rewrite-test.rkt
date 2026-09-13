@@ -176,3 +176,61 @@
             ((define (main) void (float f (float d)))))
 (check-glsl "void main() { double d = double(f); }"
             ((define (main) void (double d (double f)))))
+
+;; ---------- 复杂循环：嵌套 / break / continue / do-while / 复合条件 ----------
+(define-syntax-rule (check-src (form ...) expected)
+  (check-equal? (glsl-program-src (glsl form ...)) expected))
+
+(check-src
+ ((version 330 core) (define (main) void
+   (for (int i 0) (< i 3) (++ i)
+     (for (int j 0) (< j 3) (++ j)
+       (set! x (+ x (* i j)))))))
+ "#version 330 core\nvoid main() {\n  for (int i = 0; (i < 3); ++i) {\n    for (int j = 0; (j < 3); ++j) {\n      x = (x + (i * j));\n    }\n  }\n}")
+
+(check-src
+ ((version 330 core) (define (main) void
+   (for (int i 0) (< i 10) (++ i)
+     (when (= i 3) (continue))
+     (while (< i 8)
+       (++ i)
+       (when (> i 5) (break))))))
+ "#version 330 core\nvoid main() {\n  for (int i = 0; (i < 10); ++i) {\n    if ((i == 3)) {\n      continue;\n    }\n    while ((i < 8)) {\n      ++i;\n      if ((i > 5)) {\n        break;\n      }\n    }\n  }\n}")
+
+(check-src
+ ((version 330 core) (define (main) void
+   (do-while (< i n)
+     (++ i)
+     (set! s (+ s i)))))
+ "#version 330 core\nvoid main() {\n  do {\n    ++i;\n    s = (s + i);\n  } while ((i < n));\n}")
+
+(check-src
+ ((version 330 core) (define (main) void
+   (for (int i 0) (and (< i n) (> j 0)) (+= i 1)
+     (when (= i 5) (set! a 1.0)))))
+ "#version 330 core\nvoid main() {\n  for (int i = 0; ((i < n) && (j > 0)); i += 1) {\n    if ((i == 5)) {\n      a = 1.0;\n    }\n  }\n}")
+
+(check-src
+ ((version 330 core) (define (main) void
+   (for (int i 8) (> i 0) (-- i)
+     (continue))))
+ "#version 330 core\nvoid main() {\n  for (int i = 8; (i > 0); --i) {\n    continue;\n  }\n}")
+
+(check-src
+ ((version 330 core) (define (main) void
+   (while #t (++ i))))
+ "#version 330 core\nvoid main() {\n  while (true) {\n    ++i;\n  }\n}")
+
+;; ---------- 非法循环 / 非法语句位置 if → 清晰报错（不崩溃、不静默截断）----------
+(check-exn exn:fail?
+  (lambda () (eval '(glsl (version 330 core)
+                          (define (main) void
+                            (for (set! i 0) (< i 8) (++ i) (set! x i)))))))
+(check-exn exn:fail?
+  (lambda () (eval '(glsl (version 330 core)
+                          (define (main) void
+                            (for (int i 0 j 1) (< i 8) (++ i) (set! x i)))))))
+(check-exn exn:fail?
+  (lambda () (eval '(glsl (version 330 core)
+                          (define (main) void
+                            (if (> a b) (set! c a) (set! c b)))))))

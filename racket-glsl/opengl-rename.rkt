@@ -25,8 +25,7 @@
 ;; 用法：require 本模块后，代码里只写 kebab-case 的 gl-* 名字；
 ;;       原始驼峰名不再直接出现在教程代码里。
 ;;       需要某个还没收录的函数/常量时，按上面三条规则把它补进下面两段。
-;; double 精度（dvec/dmat/double）的专属函数也已收录：GL 4.0+ 的 gl-uniform-*d、
-;; GL 4.1+ 的 gl-vertex-attrib-l-*。教程主线用 float，这些先备着。
+;; double 精度（dvec/dmat/double）的专属函数也已收录。教程主线用 float，这些先备着。
 ;; ============================================================
 
 (require opengl)

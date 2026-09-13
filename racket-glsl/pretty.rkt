@@ -58,6 +58,22 @@
                [(char=? (string-ref s k) #\space) (scan (add1 k))]
                [else (memv (string-ref s k) '(#\; #\[))]))))
 
+;; j 处的 "while" 是 do-while 的收尾（} while (...);）还是独立 while 语句？
+;; 依据：看 while (...) 的 ) 之后是 ;（do-while 收尾）还是 {（独立 while）。
+(define (do-while-close? s n j)
+  (define k (skip-ws s n (+ j 5)))     ; 跳过 "while" 到 (
+  (and (< k n) (char=? (string-ref s k) #\()
+       (let loop ([p (add1 k)] [depth 1])
+         (cond
+           [(>= p n) #f]
+           [(char=? (string-ref s p) #\() (loop (add1 p) (add1 depth))]
+           [(char=? (string-ref s p) #\))
+            (if (= depth 1)
+                (let ([q (skip-ws s n (add1 p))])
+                  (and (< q n) (char=? (string-ref s q) #\;)))
+                (loop (add1 p) (sub1 depth)))]
+           [else (loop (add1 p) depth)]))))
+
 ;; 处理一个字符 → 新状态（纯：s=整串 n=长度 i=下标）
 (define (pstate-advance s n st i)
   (define c (string-ref s i))
@@ -81,7 +97,7 @@
      (define j (skip-ws s n (add1 i)))
      (if (or (and (< j n) (memv (string-ref s j) '(#\; #\,)))
              (word-at? s n j "else")
-             (word-at? s n j "while")
+             (and (word-at? s n j "while") (do-while-close? s n j))
              (instance-name? s n j))
          st2
          (pstate-flush st2))]
