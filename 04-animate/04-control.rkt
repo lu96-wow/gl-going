@@ -38,10 +38,11 @@
 (define paused? #f)       ; 是否暂停中
 
 ;; 键盘：空格切换暂停/继续。
-;;   key-event% 的 get-key-code 返回按键符号（空格 = 'space）。
+;;   key-event% 的 get-key-code 返回按键码：普通字符键是字符，
+;;   空格键是 #\space（字符，不是符号 'space）；特殊键才是符号（如 'escape）。
 ;;   timer 的 stop = 暂停；start interval = 继续（用同一个间隔重启）。
 (define (on-key e)
-  (when (eq? (send e get-key-code) 'space)
+  (when (eq? (send e get-key-code) #\space)
     (set! paused? (not paused?))
     (if paused?
         (begin (send ticker stop) (send frame set-label "04-04 已暂停（空格继续）"))
@@ -72,8 +73,8 @@
 (define canvas
   (new (class canvas%
          (inherit with-gl-context swap-gl-buffers)
-         ;; on-char：画布收到键盘事件时调用（key-event% 的 get-key-code 返回按键符号，
-         ;; 空格 = 'space）。键盘钩子挂在画布上，而不是窗口上。
+         ;; on-char：画布收到键盘事件时调用。key-event% 的 get-key-code 返回按键码，
+         ;; 空格键 = #\space（字符，不是符号）。键盘钩子挂在画布上，而不是窗口上。
          (define/override (on-char e) (on-key e))
          (define/override (on-size w h)
            (with-gl-context
@@ -117,3 +118,6 @@
        (notify-callback (lambda () (send canvas refresh)))))
 
 (send frame show #t)
+;; ★关键：键盘事件发给"有键盘焦点"的窗口。窗口刚显示时焦点在 frame 上，
+;;   画布收不到 on-char——所以把焦点交给画布，空格才能触发暂停/继续。
+(send canvas focus)
