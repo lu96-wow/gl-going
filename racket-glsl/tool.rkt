@@ -17,7 +17,7 @@
 ;;     opengl-rename.rkt 拿），内部统一用 kebab-case 的 gl-* 名字。
 ;; ============================================================
 
-(require "core.rkt" "opengl-rename.rkt" "gl-error.rkt" ffi/vector)
+(require "pretty.rkt" "glsl-program.rkt" "opengl-rename.rkt" "gl-error.rkt" ffi/vector)
 
 (provide compile-shader link-program build-program build-program/list
          use-program uniform-location delete-shader delete-program)

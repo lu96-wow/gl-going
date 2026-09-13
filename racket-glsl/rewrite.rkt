@@ -18,10 +18,16 @@
                      racket/set
                      racket/list
                      racket/syntax
-                     "core.rkt")
-         "core.rkt")
+                     "core.rkt"
+                     "glsl-program.rkt")
+         "core.rkt"
+         "pretty.rkt"
+         "glsl-program.rkt")
 
-(provide glsl (all-from-out "core.rkt"))
+(provide glsl
+         (all-from-out "core.rkt")
+         (all-from-out "pretty.rkt")
+         (all-from-out "glsl-program.rkt"))
 
 (begin-for-syntax
 
@@ -393,12 +399,12 @@
                            (syntax-column #'id)))]
            [_ '()]))
        (define tokens (apply append (map collect-identifiers forms)))
-       ;; 生成 (glsl-mapped (list 片段...) '(源信息...) '(标识符表...))。
+       ;; 生成 (make-glsl-program (list 片段...) '(源信息...) '(标识符表...))。
        ;; 片段 = 要运行的代码（rw-top 结果）；源信息/标识符表 = 要引用的数据。
        ;; 代码与数据分列，避免混写 quote 导致的括号/转义错误。
        (datum->syntax
-        #'glsl-mapped
-        (list 'glsl-mapped
+        #'make-glsl-program
+        (list 'make-glsl-program
               (cons 'list (map (lambda (f) (rw-top (syntax->datum f))) forms))
               (list 'quote (map source-info forms))
               (list 'quote tokens))))]))

@@ -1,7 +1,7 @@
 #lang racket/base
 
 ;; ============================================================
-;; GLSL 核心（Layer 0）——全部函数返回字符串，不含换行
+;; GLSL 核心（Layer 0）——字符串生成原语，全部返回字符串、不含换行
 ;;
 ;; 规则：
 ;;   1. 文本都是字符串（类型 "vec2"、变量 "aPos"、运算符 "+"）；
@@ -9,23 +9,23 @@
 ;;   2. 表达式不带分号；语句带分号/花括号；花括号内用空格而非换行。
 ;;   3. 二元/一元/三元永远自带括号，优先级天然安全。
 ;;   4. 名字全部 glsl- 前缀，与 Racket 核心零冲突。
-;;   5. 换行/缩进不属于核心：用 glsl-pretty 统一美化。
-;;      例外：#version 等预处理指令在 GLSL 中必须独占一行，
-;;      所以 glsl-version 保留结尾 \n（语义要求，非格式化）。
+;;   5. 换行/缩进不属于核心（见 pretty.rkt）；
+;;      例外：#version 等预处理指令必须独占一行，所以 glsl-version 保留结尾 \n。
 ;;
-;; 之后的重写层（Layer 1）只做"位置驱动改名"，
-;; 把用户表面(vec2 / set! / if / + ...)重写成本文件的调用。
+;; 分层：
+;;   core.rkt          本层：字符串生成原语
+;;   pretty.rkt        美化（字符串 → 多行缩进文本）
+;;   glsl-program.rkt  (glsl ...) 的产物：带源映射的 GLSL 程序
+;;   rewrite.rkt       (glsl ...) 宏（表面语法 → core 调用）
 ;; ============================================================
 
 (require racket/format racket/string)
 
 (provide
- ;; 拼装 / 美化 / 源映射
- glsl-shader glsl-pretty glsl-version glsl-raw
- glsl-src glsl-mapped glsl-program-lookup
- (struct-out glsl-program)
- (struct-out glsl-form)
- (struct-out glsl-token)
+ ;; 拼装
+ glsl-shader glsl-version glsl-raw
+ ;; 共享小工具
+ ->str ident-char?
  ;; 声明
  glsl-decl glsl-in glsl-out glsl-uniform glsl-const glsl-layout glsl-layout-qual
  ;; 表达式
@@ -47,6 +47,10 @@
      (error 'glsl "GLSL 没有有理数字面量：~s。请写小数（如 0.5）或用 (/ 1.0 2.0)" x)]
     [else (~a x)]))
 
+;; GLSL 标识符字符（pretty 的词边界 / gl-error 的标识符识别共用）
+(define (ident-char? c)
+  (or (char-alphabetic? c) (char-numeric? c) (char=? c #\_)))
+
 ;; 若是 "{" 开头的块就不重复包，否则包成块（单行，空格分隔）
 (define (block? x) (and (string? x) (string-prefix? x "{")))
 (define (wrap-block x)
@@ -66,163 +70,11 @@
 (define (join-spaces xs)
   (string-join (map ->str xs) " "))
 
-;; ---------- 0. 拼装 / 美化 ----------
+;; ---------- 0. 拼装 ----------
 
-;; 拼装：片段之间用空格分隔（换行交给 glsl-pretty）
+;; 拼装：片段之间用空格分隔（换行交给 pretty.rkt 的 glsl-pretty）
 (define (glsl-shader . parts)
   (string-join (map ->str parts) " "))
-
-;; ---------- (glsl ...) 的产物：带源映射的 GLSL 程序 ----------
-
-;; glsl-program：src = 美化后的 GLSL（可直接编译）；forms = 每个顶层 form 的源映射；
-;;               tokens = 每个标识符的精确源位置（报错直接指到标识符用）
-(struct glsl-program (src forms tokens) #:transparent)
-;; glsl-token：一个标识符名 + 它的源文件位置
-(struct glsl-token (name src-path src-line src-col) #:transparent)
-;; glsl-form：一个顶层 form 的源映射
-;;   src-path = .rkt 源文件路径（拿不到则 #f）；src-line/src-col/src-span = 源文件里的位置
-;;   text = 该 form 的原始 s 表达式；start-line/end-line = 生成 GLSL 落在哪几行（闭区间）
-(struct glsl-form (src-path src-line src-col src-span text start-line end-line) #:transparent)
-
-;; 取出 GLSL 源文本：glsl-program → 它的 src；字符串 → 原样
-(define (glsl-src x)
-  (if (glsl-program? x) (glsl-program-src x) x))
-
-;; ---------- 美化（纯函数：数据 → 数据，无副作用） ----------
-
-;; 美化状态（不可变，靠 struct-copy 推进）
-(struct ps (lines cur brace paren in-str? started?) #:transparent)
-
-(define (ps-flush st)
-  (if (string=? (ps-cur st) "")
-      (struct-copy ps st [started? #f])
-      (struct-copy ps st [lines (cons (ps-cur st) (ps-lines st))] [cur ""] [started? #f])))
-
-(define (ps-append st cs)
-  (struct-copy ps st [cur (string-append (ps-cur st) cs)]))
-
-;; 新起一行时先补缩进；已在本行则原样
-(define (ps-start st)
-  (if (ps-started? st)
-      st
-      (ps-append (struct-copy ps st [started? #t])
-                 (make-string (* 2 (ps-brace st)) #\space))))
-
-(define (ident-char? c)
-  (or (char-alphabetic? c) (char-numeric? c) (char=? c #\_)))
-
-;; i 起跳过空白，返回下一个非空白下标（无则 n）
-(define (skip-ws s n i)
-  (cond [(>= i n) n]
-        [(char-whitespace? (string-ref s i)) (skip-ws s n (add1 i))]
-        [else i]))
-
-;; i 处是否以 word 开头（词边界）
-(define (word-at? s n i word)
-  (define wl (string-length word))
-  (and (<= (+ i wl) n)
-       (equal? (substring s i (+ i wl)) word)
-       (or (= (+ i wl) n)
-           (not (ident-char? (string-ref s (+ i wl)))))))
-
-;; j 处是否形如 "名字;" / "名字["（接口块实例名，} 之后应保持同行）
-(define (instance-name? s n j)
-  (and (< j n)
-       (ident-char? (string-ref s j))
-       (let scan ([k j])
-         (cond [(>= k n) #f]
-               [(ident-char? (string-ref s k)) (scan (add1 k))]
-               [(char=? (string-ref s k) #\space) (scan (add1 k))]
-               [else (memv (string-ref s k) '(#\; #\[))]))))
-
-;; 处理一个字符 → 新状态（纯：s=整串 n=长度 i=下标）
-(define (ps-advance s n st i)
-  (define c (string-ref s i))
-  (define cs (string c))
-  (cond
-    [(ps-in-str? st)
-     (struct-copy ps st [cur (string-append (ps-cur st) cs)] [in-str? (not (char=? c #\"))])]
-    [(char=? c #\")
-     (struct-copy ps (ps-append (ps-start st) cs) [in-str? #t])]
-    [(char=? c #\newline)
-     (ps-flush st)]
-    [(char=? c #\()
-     (struct-copy ps (ps-append (ps-start st) cs) [paren (add1 (ps-paren st))])]
-    [(char=? c #\))
-     (struct-copy ps (ps-append st cs) [paren (sub1 (ps-paren st))])]
-    [(char=? c #\{)
-     (struct-copy ps (ps-flush (ps-append (ps-start st) cs)) [brace (add1 (ps-brace st))])]
-    [(char=? c #\})
-     (define st1 (struct-copy ps (ps-flush st) [brace (sub1 (ps-brace st))]))
-     (define st2 (ps-append (ps-start st1) cs))
-     (define j (skip-ws s n (add1 i)))
-     (if (or (and (< j n) (memv (string-ref s j) '(#\; #\,)))
-             (word-at? s n j "else")
-             (word-at? s n j "while")
-             (instance-name? s n j))
-         st2
-         (ps-flush st2))]
-    [(and (char=? c #\;) (zero? (ps-paren st)))
-     (ps-flush (ps-append st cs))]
-    [(char-whitespace? c)
-     (if (ps-started? st) (ps-append st cs) st)]
-    [else
-     (ps-append (ps-start st) cs)]))
-
-;; 美化 + 在 marks（升序 raw 下标）处记录"该字符落在第几行"。
-;; 纯函数：数据 → 数据，无 set! / box。
-(define (glsl-pretty-line-map s marks)
-  (define n (string-length s))
-  (define (go i st marks-left recorded)
-    (if (>= i n)
-        (let ([final (ps-flush st)])
-          (values (string-join (reverse (ps-lines final)) "\n")
-                  (reverse recorded)))
-        (let ([hit? (and (pair? marks-left) (= i (car marks-left)))])
-          (go (add1 i)
-              (ps-advance s n st i)
-              (if hit? (cdr marks-left) marks-left)
-              (if hit? (cons (add1 (length (ps-lines st))) recorded) recorded)))))
-  (go 0 (ps '() "" 0 0 #f #f) marks '()))
-
-;; 美化（不记录位置）。参数也接受 glsl-program（取它的 src）。
-(define (glsl-pretty s)
-  (define-values (str _) (glsl-pretty-line-map (glsl-src s) '()))
-  str)
-
-;; ---------- 源映射构造 ----------
-
-;; 每个片段在 raw 串里的 [start, end] 闭区间下标
-(define (part-spans strs)
-  (let loop ([xs strs] [offset 0] [acc '()])
-    (if (null? xs)
-        (reverse acc)
-        (let ([len (string-length (car xs))])
-          (define start offset)
-          (define end (max start (- (+ start len) 1)))  ; len>=1 时 = start+len-1；空串退化为 start
-          (loop (cdr xs) (+ start len 1) (cons (cons start end) acc))))))
-
-;; 把 (parts source-infos tokens) 拼成 glsl-program：
-;;   parts = 各顶层 form 生成的 GLSL 字符串（已求值，顺序对应）
-;;   source-infos = 各 form 的 (src-path src-line src-col src-span text)
-;;   tokens = 各标识符的 (name src-path src-line src-col)
-(define (glsl-mapped parts source-infos tokens)
-  (define spans (part-spans parts))
-  (define marks (apply append (map (lambda (sp) (list (car sp) (cdr sp))) spans)))
-  (define-values (pretty lines) (glsl-pretty-line-map (string-join parts " ") marks))
-  (define forms
-    (for/list ([info source-infos] [i (in-naturals)])
-      (glsl-form (list-ref info 0) (list-ref info 1) (list-ref info 2) (list-ref info 3) (list-ref info 4)
-                 (list-ref lines (* 2 i))
-                 (list-ref lines (+ (* 2 i) 1)))))
-  ;; tokens 进来是 (名字 路径 行 列) 的裸列表，转成 glsl-token 结构
-  (glsl-program pretty forms (map (lambda (t) (apply glsl-token t)) tokens)))
-
-;; 查询：美化 GLSL 第 line 行落在哪个顶层 form；没有则 #f
-(define (glsl-program-lookup prog line)
-  (for/first ([f (glsl-program-forms prog)]
-              #:when (<= (glsl-form-start-line f) line (glsl-form-end-line f)))
-    f))
 
 (define (glsl-version n [profile #f])
   (if profile

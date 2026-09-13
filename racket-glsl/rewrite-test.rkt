@@ -24,7 +24,7 @@
      (set! gl_Position (vec4 aPos 0.0 1.0)))))
 
 (check-equal?
- (glsl-pretty vert)
+ (glsl-program-src vert)
  "#version 330 core\nlayout(location = 0) in vec2 aPos;\nlayout(location = 1) in vec2 aUV;\nout vec2 vUV;\nvoid main() {\n  vUV = aUV;\n  gl_Position = vec4(aPos, 0.0, 1.0);\n}")
 
 ;; ---------- 片元着色器（02 课，表面语法） ----------
@@ -48,7 +48,7 @@
      (set! FragColor (vec4 (clamp c 0.0 1.0) 1.0)))))
 
 (displayln "===== 02 片元（表面语法 → 美化）=====")
-(displayln (glsl-pretty frag))
+(displayln (glsl-program-src frag))
 (newline)
 
 ;; ---------- 语法覆盖断言（逐个特性） ----------

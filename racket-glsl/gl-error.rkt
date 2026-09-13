@@ -13,7 +13,7 @@
 ;; 四个渲染器各自独立、可单独打印；render-error 把它们拼成一整段。
 ;; ============================================================
 
-(require racket/string "core.rkt")
+(require racket/string "core.rkt" "glsl-program.rkt")
 
 (provide parse-gl-error-log locate-gl-error render-error
          render-gl-linecol render-gl-pretty render-sexpr-linecol render-sexpr-pretty
@@ -47,13 +47,10 @@
 
 ;; ---------- ② 定位 ----------
 
-(define (ident-char? c)
-  (or (char-alphabetic? c) (char-numeric? c) (char=? c #\_)))
-
 ;; 从日志消息里抠出出错标识符名：`aPs' undeclared → "aPs"
-(define msg-token-pattern #rx"`([A-Za-z_][A-Za-z0-9_]*)'")
+(define log-token-pattern #rx"`([A-Za-z_][A-Za-z0-9_]*)'")
 (define (token-name-from-msg msg)
-  (define m (regexp-match msg-token-pattern msg))
+  (define m (regexp-match log-token-pattern msg))
   (and m (list-ref m 1)))
 
 ;; 在源码第 line 行第 col 列（1 起）处读出那个标识符名；读不到则 #f
@@ -140,8 +137,8 @@
   (if (not e)
       ""
       (let* ([f (located-error-form e)]
-             [s (sexpr-pretty (glsl-form-text f))]
-             [pos (find-token-position s (located-error-token-name e))])
+             [s (pretty-sexpr (glsl-form-text f))]
+             [pos (token-position-in s (located-error-token-name e))])
         (if (not pos)
             ""
             (string-append "④ s表达式 美化报错\n"
@@ -177,7 +174,7 @@
    "\n"))
 
 ;; s 表达式 → 美化文本（短列表一行；长列表按深度换行缩进）
-(define (sexpr-pretty d)
+(define (pretty-sexpr d)
   (let go ([d d] [depth 0])
     (cond
       [(pair? d)
@@ -189,7 +186,7 @@
       [else (format "~s" d)])))
 
 ;; 在 s 里找名为 name 的标识符（词边界），返回 (line col) 或 #f
-(define (find-token-position s name)
+(define (token-position-in s name)
   (define n (string-length s))
   (define nl (string-length name))
   (let loop ([i 0] [line 1] [col 1])

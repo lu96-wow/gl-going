@@ -1,5 +1,5 @@
 #lang racket/base
-(require "racket-glsl/rewrite.rkt")
+(require "../racket-glsl/rewrite.rkt")
 
 (define prog
   (glsl (version 330 core)

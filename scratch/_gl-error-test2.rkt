@@ -1,8 +1,8 @@
 #lang racket/base
 ;; 类型不匹配：gl_Position 是 vec4，却直接赋 vec2 的 aPos
-(require "01-window/04-gui-tool.rkt")
-(require "racket-glsl/rewrite.rkt")
-(require "racket-glsl/tool.rkt")
+(require "../01-window/04-gui-tool.rkt")
+(require "../racket-glsl/rewrite.rkt")
+(require "../racket-glsl/tool.rkt")
 (define vert-src
   (glsl (version 330 core)
         (layout (location 0) in vec2 aPos)

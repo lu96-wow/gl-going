@@ -58,8 +58,8 @@
           ;; 先给所有像素一个固定橙色，看看着色器能跑起来。
           (set! FragColor (vec4 1.0 0.35 0.2 1.0)))))
 
-;; glsl-pretty：把展开出的 GLSL 按缩进排版，方便对照着读。
-(printf "顶点着色器展开为：\n~a\n\n" (glsl-pretty vert-src))
-(printf "片元着色器展开为：\n~a\n" (glsl-pretty frag-src))
+;; glsl-program-src：取出 (glsl ...) 生成的美化后 GLSL 源文本，方便对照着读。
+(printf "顶点着色器展开为：\n~a\n\n" (glsl-program-src vert-src))
+(printf "片元着色器展开为：\n~a\n" (glsl-program-src frag-src))
 
 ;; 本步到此为止：没有窗口、没有编译、没有绘制，只是"看懂着色器文本"。

@@ -1,5 +1,5 @@
 #lang racket/base
-(require "racket-glsl/rewrite.rkt")
+(require "../racket-glsl/rewrite.rkt")
 
 (define (dump title prog)
   (printf "\n===== ~a =====\n~a" title (glsl-program-src prog))
