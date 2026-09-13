@@ -1,22 +1,24 @@
 #lang racket/base
 
 ;; ============================================================
-;; gl-error.rkt —— OpenGL 报错的四段式源映射处理（纯函数层）
+;; gl-error.rkt —— OpenGL 报错的三段式源映射处理（纯函数层）
 ;;
-;; 报错拆成四个独立的"视角"，每个只做一件事：
+;; 报错拆成三个独立的"视角"，每个只做一件事：
 ;;   ① OpenGL 行列报错   原始编译器日志（0:行(列): error: ...）
 ;;   ② OpenGL 美化报错   美化后的 GLSL 源码 + ^（指到 GLSL 出错列）
-;;   ③ s表达式 行列报错   .rkt 里的 form / 标识符位置（文件:行:列）
-;;   ④ s表达式 美化报错   s 表达式本身 + ^（指到出错标识符）
+;;   ③ s表达式 美化报错   源文件原文 + ^（标题里带 标识符 @ 文件:行:列）
 ;;
-;; 全部是 数据 → lambda → 数据 的纯函数，无副作用。
-;; 四个渲染器各自独立、可单独打印；render-error 把它们拼成一整段。
+;; 说明：原来单列的「s表达式 行列报错」已合并进 ③——③ 直接按源码原始行列
+;; 展示，行号 + ^ 就表达了行列，再单独打印 文件:行:列 是重复的。
+;;
+;; 全部是 数据 → lambda → 数据 的纯函数，无副作用（读源文件是报错路径上唯一的 IO）。
+;; 三个渲染器各自独立、可单独打印；render-error 把它们拼成一整段。
 ;; ============================================================
 
-(require racket/string "core.rkt" "glsl-program.rkt")
+(require racket/string racket/file "core.rkt" "glsl-program.rkt")
 
 (provide parse-gl-error-log locate-gl-error render-error
-         render-gl-linecol render-gl-pretty render-sexpr-linecol render-sexpr-pretty
+         render-gl-linecol render-gl-pretty render-sexpr-pretty
          (struct-out gl-error) (struct-out located-error))
 
 ;; ---------- 数据 ----------
@@ -109,41 +111,36 @@
                                           (located-error-line e)
                                           (located-error-caret-col e)))))
 
-;; ③ s表达式 行列报错：form 起点 + 出错标识符在 .rkt 里的位置
-(define (render-sexpr-linecol located)
-  (define e (first-located located located-error-form))
-  (if (not e)
-      ""
-      (let* ([f (located-error-form e)]
-             [p (glsl-form-src-path f)]
-             [form-pos (if p
-                           (format "~a:~a:~a" p (glsl-form-src-line f) (add1 (glsl-form-src-col f)))
-                           "未知")]
-             [tok (located-error-token-name e)]
-             [tok-poses
-              (map (lambda (t)
-                     (format "~a:~a:~a" (glsl-token-src-path t) (glsl-token-src-line t) (add1 (glsl-token-src-col t))))
-                   (located-error-token-locs e))])
-        (string-append
-         "③ s表达式 行列报错\n"
-         (format "  form 起点：~a\n" form-pos)
-         (if tok
-             (format "  标识符 ~a：~a\n" tok (string-join tok-poses "、"))
-             "")))))
-
-;; ④ s表达式 美化报错：s 表达式 + ^（指到出错标识符）
+;; ③ s表达式 美化报错：优先按「源码原文」展示（读 .rkt 文件，用原始行列 + ^）；
+;; 读不到文件（如 REPL / 无源路径）才回退到格式化 datum + ^。
+;; 标题里带「标识符 @ 文件:行:列」——这就是原来的 s表达式 行列报错，折叠进来避免重复。
 (define (render-sexpr-pretty located)
-  (define e (first-located located (lambda (x) (and (located-error-form x) (located-error-token-name x)))))
+  (define e (first-located located (lambda (x) (and (located-error-form x)
+                                                    (located-error-token-name x)
+                                                    (pair? (located-error-token-locs x))))))
   (if (not e)
       ""
-      (let* ([f (located-error-form e)]
-             [s (pretty-sexpr (glsl-form-text f))]
-             [pos (token-position-in s (located-error-token-name e))])
-        (if (not pos)
-            ""
-            (string-append "④ s表达式 美化报错\n"
-                           (render-sexpr-caret s (car pos) (cadr pos)
-                                               (string-length (located-error-token-name e))))))))
+      (let* ([tok (car (located-error-token-locs e))]
+             [path (glsl-token-src-path tok)]
+             [line (glsl-token-src-line tok)]
+             [col (add1 (glsl-token-src-col tok))]
+             [caret-len (string-length (located-error-token-name e))]
+             [header (if (and path line)
+                         (format "③ s表达式 美化报错 · ~a @ ~a:~a:~a\n"
+                                 (located-error-token-name e) path line col)
+                         "③ s表达式 美化报错\n")])
+        (string-append
+         header
+         (cond
+           [(and path line (read-file-text path))
+            => (lambda (text) (render-source-file-caret text line col caret-len))]
+           [else
+            (let* ([f (located-error-form e)]
+                   [s (pretty-sexpr (glsl-form-text f))]
+                   [pos (token-position-in s (located-error-token-name e))])
+              (if pos
+                  (render-sexpr-caret s (car pos) (cadr pos) caret-len)
+                  ""))])))))
 
 ;; ---------- 渲染工具 ----------
 
@@ -171,6 +168,28 @@
      (if (= i line)
          (string-append l "\n" (make-string (sub1 caret-col) #\space) (make-string caret-len #\^))
          l))
+   "\n"))
+
+;; 读源文件全文；失败返回 #f（报错层唯一的 IO，只在报错路径上发生）
+(define (read-file-text path)
+  (with-handlers ([exn:fail? (lambda (e) #f)])
+    (file->string path)))
+
+;; 在源文件原文里展示第 line 行附近（±1 行）+ ^（col 1 起；caret-len = 下划线长度）
+(define (render-source-file-caret text line col caret-len)
+  (define ls (string-split text "\n"))
+  (define n (length ls))
+  (define start (max 1 (sub1 line)))
+  (define end (min n (add1 line)))
+  (define w (string-length (number->string n)))
+  (define (pad i) (string-append (make-string (- w (string-length (number->string i))) #\space) (number->string i)))
+  (string-join
+   (for/list ([i (in-range start (add1 end))])
+     (define l (list-ref ls (sub1 i)))
+     (if (= i line)
+         (string-append (pad i) " | " l "\n"
+                        (make-string w #\space) " | " (make-string (sub1 col) #\space) (make-string caret-len #\^))
+         (string-append (pad i) " | " l)))
    "\n"))
 
 ;; s 表达式 → 美化文本（短列表一行；长列表按深度换行缩进）
@@ -211,6 +230,5 @@
    (filter (lambda (s) (not (string=? s "")))
            (list (render-gl-linecol log)
                  (render-gl-pretty src located)
-                 (render-sexpr-linecol located)
                  (render-sexpr-pretty located)))
    "\n\n"))
