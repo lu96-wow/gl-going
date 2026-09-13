@@ -58,7 +58,7 @@
     (define located (map (lambda (e) (locate-gl-error ctx e))
                          (parse-gl-error-log log)))
     (error 'compile-shader
-           "着色器编译失败：\n\n~a"
+           "shader compile failed:\n\n~a"
            (render-error log ctx located)))
   shader)
 
@@ -71,7 +71,7 @@
     (gl-attach-shader prog s))
   (gl-link-program prog)
   (when (zero? (gl-get-program-iv prog gl-link-status))
-    (error 'link-program "程序链接失败：\n~a" (program-info-log prog)))
+    (error 'link-program "program link failed:\n~a" (program-info-log prog)))
   prog)
 
 ;; ---------- ③ 组织：把 (阶段类型 源码) 编译 + 链接成一个程序 ----------

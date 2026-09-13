@@ -99,14 +99,14 @@
 
 ;; ① OpenGL 行列报错：原始日志
 (define (render-gl-linecol log)
-  (string-append "① OpenGL 行列报错（编译器日志）\n" log))
+  (string-append "OpenGL log:\n" log))
 
 ;; ② OpenGL 美化报错：美化 GLSL 源码 + ^
 (define (render-gl-pretty src located)
   (define e (first-located located located-error-line))
   (if (not e)
       ""
-      (string-append "② OpenGL 美化报错\n"
+      (string-append "OpenGL source:\n"
                      (render-gl-src-caret (glsl-src src)
                                           (located-error-line e)
                                           (located-error-caret-col e)))))
@@ -124,22 +124,21 @@
              [path (glsl-token-src-path tok)]
              [line (glsl-token-src-line tok)]
              [col (add1 (glsl-token-src-col tok))]
-             [caret-len (string-length (located-error-token-name e))]
              [header (if (and path line)
-                         (format "③ s表达式 美化报错 · ~a @ ~a:~a:~a\n"
+                         (format "s-expr source: ~a @ ~a:~a:~a\n"
                                  (located-error-token-name e) path line col)
-                         "③ s表达式 美化报错\n")])
+                         "s-expr source:\n")])
         (string-append
          header
          (cond
            [(and path line (read-file-text path))
-            => (lambda (text) (render-source-file-caret text line col caret-len))]
+            => (lambda (text) (render-source-file-caret text line col))]
            [else
             (let* ([f (located-error-form e)]
                    [s (pretty-sexpr (glsl-form-text f))]
                    [pos (token-position-in s (located-error-token-name e))])
               (if pos
-                  (render-sexpr-caret s (car pos) (cadr pos) caret-len)
+                  (render-sexpr-caret s (car pos) (cadr pos))
                   ""))])))))
 
 ;; ---------- 渲染工具 ----------
@@ -160,13 +159,13 @@
         (string-append (pad (number->string i)) " | " l)]))
    "\n"))
 
-;; s 表达式 + ^（无行号；caret-len = 下划线长度）
-(define (render-sexpr-caret src line caret-col caret-len)
+;; s 表达式 + ^（无行号；caret-col 1 起，单个 ^ 指词首）
+(define (render-sexpr-caret src line caret-col)
   (define ls (string-split src "\n"))
   (string-join
    (for/list ([i (in-naturals 1)] [l ls])
      (if (= i line)
-         (string-append l "\n" (make-string (sub1 caret-col) #\space) (make-string caret-len #\^))
+         (string-append l "\n" (make-string (sub1 caret-col) #\space) "^")
          l))
    "\n"))
 
@@ -175,22 +174,17 @@
   (with-handlers ([exn:fail? (lambda (e) #f)])
     (file->string path)))
 
-;; 在源文件原文里展示第 line 行附近（±1 行）+ ^（col 1 起；caret-len = 下划线长度）
-(define (render-source-file-caret text line col caret-len)
+;; 展示源文件第 line 行的原文 + ^（col 1 起，单个 ^ 指词首）
+(define (render-source-file-caret text line col)
   (define ls (string-split text "\n"))
   (define n (length ls))
-  (define start (max 1 (sub1 line)))
-  (define end (min n (add1 line)))
-  (define w (string-length (number->string n)))
-  (define (pad i) (string-append (make-string (- w (string-length (number->string i))) #\space) (number->string i)))
-  (string-join
-   (for/list ([i (in-range start (add1 end))])
-     (define l (list-ref ls (sub1 i)))
-     (if (= i line)
-         (string-append (pad i) " | " l "\n"
-                        (make-string w #\space) " | " (make-string (sub1 col) #\space) (make-string caret-len #\^))
-         (string-append (pad i) " | " l)))
-   "\n"))
+  (if (not (<= 1 line n))
+      ""
+      (let* ([l (list-ref ls (sub1 line))]
+             [w (string-length (number->string n))]
+             [pad (string-append (make-string (- w (string-length (number->string line))) #\space) (number->string line))])
+        (string-append pad " | " l "\n"
+                       (make-string w #\space) " | " (make-string (sub1 col) #\space) "^"))))
 
 ;; s 表达式 → 美化文本（短列表一行；长列表按深度换行缩进）
 (define (pretty-sexpr d)
