@@ -24,15 +24,17 @@
 
 ;; ---------- 内部：报错日志 ----------
 
-(define (shader-info-log shader)
-  (define len (gl-get-shader-iv shader gl-info-log-length))
-  (define-values (actual log) (gl-get-shader-info-log shader len))
+;; 取 info log：get-iv 查长度、get-log 取内容，拼成 UTF-8 字符串（shader/program 共用）
+(define (info-log get-iv get-log obj)
+  (define len (get-iv obj gl-info-log-length))
+  (define-values (actual log) (get-log obj len))
   (bytes->string/utf-8 log #\? 0 actual))
 
+(define (shader-info-log shader)
+  (info-log gl-get-shader-iv gl-get-shader-info-log shader))
+
 (define (program-info-log prog)
-  (define len (gl-get-program-iv prog gl-info-log-length))
-  (define-values (actual log) (gl-get-program-info-log prog len))
-  (bytes->string/utf-8 log #\? 0 actual))
+  (info-log gl-get-program-iv gl-get-program-info-log prog))
 
 ;; 报错定位（解析 / 定位 / 渲染）在 gl-error.rkt，本文件只做第 ④ 阶段：抛出。
 

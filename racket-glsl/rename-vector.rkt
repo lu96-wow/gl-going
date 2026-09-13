@@ -99,18 +99,23 @@
 
 ;; ---------- 拼装 ----------
 
+;; 通用原地拼接：把若干同型 cvector 依次写进 dst（从下标 0 开始），返回元素数。
+;; get-len / get-ref / cset! 是该 cvector 类型的 长度/读/写 函数——f32、f64 共用这一份循环。
+(define (concat-cvector! get-len get-ref cset! dst vs)
+  (define i 0)
+  (for ([v vs])
+    (for ([j (in-range (get-len v))])
+      (cset! dst i (get-ref v j))
+      (set! i (add1 i))))
+  i)
+
 ;; 把一串 vec（f32vector）依次写进 dst（原地，从下标 0 开始），返回写入的元素数。
 ;; 给"每帧重新生成顶点数据"的动态场景：dst 预分配一次、每帧覆写，零额外分配。
 ;;   (define buf (make-f32vector MAX 0.0))            ; init 时分配一次
 ;;   (define n (concat-vecs! buf (list (vec2 ...) ...)))  ; 每帧覆写，n = 元素数
-;;   (glBufferSubData GL_ARRAY_BUFFER 0 (* 4 n) buf)   ; 只更新 GPU，不重分配
+;;   (gl-buffer-sub-data gl-array-buffer 0 (* 4 n) buf)   ; 只更新 GPU，不重分配
 (define (concat-vecs! dst vs)
-  (define i 0)
-  (for ([v vs])
-    (for ([j (in-range (f32vector-length v))])
-      (f32vector-set! dst i (f32vector-ref v j))
-      (set! i (add1 i))))
-  i)
+  (concat-cvector! f32vector-length f32vector-ref f32vector-set! dst vs))
 
 ;; 把多个 vec（f32vector）连成一个**新**连续缓冲（静态数据：拼一次即可）。
 ;; 例：(concat-vecs (vec2 -0.5 -0.5) (vec2 0.5 -0.5) (vec2 0.0 0.5))
@@ -126,12 +131,7 @@
 ;; double 版：把多个 dvec（f64vector）连成一个**新**连续缓冲。
 ;; 给 double 顶点数据（dvec3 位置 / dvec4 齐次坐标等）拼 VBO 用。
 (define (concat-dvecs! dst vs)
-  (define i 0)
-  (for ([v vs])
-    (for ([j (in-range (f64vector-length v))])
-      (f64vector-set! dst i (f64vector-ref v j))
-      (set! i (add1 i))))
-  i)
+  (concat-cvector! f64vector-length f64vector-ref f64vector-set! dst vs))
 
 (define (concat-dvecs . vs)
   (define total (for/sum ([v vs]) (f64vector-length v)))
@@ -278,9 +278,16 @@
   (unless e (error 'glsl-size "未知 GLSL 类型（或无可表示的 CPU 类型）：~s" t))
   (cdr e))
 
+;; 精度判断：double 族（double/dvec*/dmat*）→ f64；float 族 → f32。
+;; 一处定义、三处用：glsl-component-bytes / pack / glsl-struct（宏在编译期，
+;; 用下面同名的 define-for-syntax 常量）。
+(define-for-syntax double-family '(double dvec2 dvec3 dvec4 dmat2 dmat3 dmat4))
+(define double-family '(double dvec2 dvec3 dvec4 dmat2 dmat3 dmat4))
+(define (double-type? t) (and (memq t double-family) #t))
+
 ;; 每个分量占几字节：float/int/uint/bool 系 = 4；double 系 = 8
 (define (glsl-component-bytes t)
-  (if (memq t '(double dvec2 dvec3 dvec4 dmat2 dmat3 dmat4)) 8 4))
+  (if (double-type? t) 8 4))
 
 ;; 元素数 × 分量字节数
 (define (glsl-byte-size t) (* (glsl-size t) (glsl-component-bytes t)))
@@ -297,10 +304,6 @@
 (define (glsl-stride-bytes . types)
   (apply + (map glsl-byte-size types)))
 
-;; 精度判断：double 族（double/dvec*/dmat*）→ f64；float 族 → f32。
-(define double-family '(double dvec2 dvec3 dvec4 dmat2 dmat3 dmat4))
-(define (double-type? t) (and (memq t double-family) #t))
-
 ;; 低层原语：按类型清单把字段值铺成一条交错的记录（标量字段直接给数）。
 ;; 一般不要直接用——用 glsl-struct（具名字段）表达交错记录，它内部调 pack。
 ;; 精度对称：字段类型全 float → f32vector；全 double → f64vector；混用 → 报错。
@@ -311,29 +314,22 @@
   (define any-double? (ormap double-type? types))
   (when (and any-double? (not all-double?))
     (error 'pack "交错缓冲不能混用 float/double 精度：~s" types))
-  (if all-double?
-      ;; double 记录：f64vector（标量字段给 flonum；向量字段给 dvec/dmat = f64vector）
-      (apply concat-dvecs
-             (for/list ([t (in-list types)] [f (in-list fields)])
-               (define n (glsl-size t))
-               (cond
-                 [(= n 1) (f64vector (check-float 'pack f))]
-                 [(f64vector? f)
-                  (unless (= (f64vector-length f) n)
-                    (error 'pack "字段 ~s 应为长度 ~a 的 f64 向量，实际 ~a" t n (f64vector-length f)))
-                  f]
-                 [else (error 'pack "字段 ~s 应为标量（flonum）或 f64 向量，实际 ~s" t f)])))
-      ;; float 记录：f32vector（标量字段给 flonum；向量字段给 vec/mat = f32vector）
-      (apply concat-vecs
-             (for/list ([t (in-list types)] [f (in-list fields)])
-               (define n (glsl-size t))
-               (cond
-                 [(= n 1) (f32vector (check-float 'pack f))]
-                 [(f32vector? f)
-                  (unless (= (f32vector-length f) n)
-                    (error 'pack "字段 ~s 应为长度 ~a 的 f32 向量，实际 ~a" t n (f32vector-length f)))
-                  f]
-                 [else (error 'pack "字段 ~s 应为标量（flonum）或 f32 向量，实际 ~s" t f)])))))
+  ;; 按精度选一套"向量原语"：标量构造 / 向量谓词 / 向量长度 / 拼接
+  (define-values (one vec? vlen concat)
+    (if all-double?
+        (values f64vector f64vector? f64vector-length concat-dvecs)
+        (values f32vector f32vector? f32vector-length concat-vecs)))
+  (apply concat
+         (for/list ([t (in-list types)] [f (in-list fields)])
+           (define n (glsl-size t))
+           (cond
+             [(= n 1) (one (check-float 'pack f))]
+             [(vec? f)
+              (unless (= (vlen f) n)
+                (error 'pack "字段 ~s 应为长度 ~a 的向量，实际 ~a" t n (vlen f)))
+              f]
+             [else (error 'pack "字段 ~s 应为标量（flonum）或 ~a 向量，实际 ~s"
+                          t (if all-double? "f64" "f32") f)]))))
 
 ;; 低层原语：交错布局里每个字段的字节偏移（glsl-struct 内部用）：
 ;;   (glsl-field-offsets '(vec3 vec3 float)) → '(0 12 24)
@@ -362,7 +358,7 @@
      (let* ([types     (syntax->list #'(type ...))]
             [fields    (syntax->list #'(field ...))]
             [type-syms (map syntax->datum types)]
-            [double?   (lambda (t) (memq t '(double dvec2 dvec3 dvec4 dmat2 dmat3 dmat4)))]
+            [double?   (lambda (t) (memq t double-family))]
             [all-double? (andmap double? type-syms)]
             [any-double? (ormap double? type-syms)])
        (when (null? fields)

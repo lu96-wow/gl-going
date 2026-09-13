@@ -91,7 +91,7 @@
     [else
      (located-error #f #f (gl-error-msg err) #f #f #f '())]))
 
-;; ---------- ③ 四个渲染器 ----------
+;; ---------- ③ 三个渲染器 ----------
 
 ;; 取第一条满足条件的定位错误
 (define (first-located located pred)

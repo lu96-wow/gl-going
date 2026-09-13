@@ -252,19 +252,16 @@
     '(in out uniform const buffer flat smooth noperspective centroid sample patch
       invariant precise shared readonly writeonly restrict coherent volatile))
 
-  ;; layout item → 核心 spec 项：(key value) 或裸名
-  (define (rw-layout-item it)
-    (cond
-      [(and (pair? it) (null? (cdr it))) (symbol->string (car it))]  ; (std140)/(points) 等裸项
-      [(pair? it) (list 'list (symbol->string (car it)) (cadr it))]  ; (location 0)（数据形式）
-      [else (symbol->string it)]))                                    ; 裸符号
-
-  ;; 同上，但产出"运行时值"（给 field->str 直接调核心层用）：(offset 0) → ("offset" 0)
+  ;; layout item → 运行时值：裸项 (std140) → "std140"；(offset 0) → ("offset" 0)
   (define (layout-item->val it)
     (cond
       [(and (pair? it) (null? (cdr it))) (symbol->string (car it))]
       [(pair? it) (list (symbol->string (car it)) (cadr it))]
       [else (symbol->string it)]))
+
+  ;; 同上，但产出"代码"（quote 成数据），供 rw-layout 嵌入生成表达式
+  (define (rw-layout-item it)
+    (list 'quote (layout-item->val it)))
 
   ;; 收集 layout 项，直到遇到类型或限定符关键字
   (define (collect-layout-items forms)
