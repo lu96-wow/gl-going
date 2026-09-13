@@ -16,7 +16,7 @@
 ;;     opengl-rename.rkt 拿），内部统一用 kebab-case 的 gl-* 名字。
 ;; ============================================================
 
-(require "opengl-rename.rkt" ffi/vector)
+(require racket/string "core.rkt" "opengl-rename.rkt" ffi/vector)
 
 (provide compile-shader link-program build-program build-program/list
          use-program uniform-location delete-shader delete-program)
@@ -33,19 +33,56 @@
   (define-values (actual log) (gl-get-program-info-log prog len))
   (bytes->string/utf-8 log #\? 0 actual))
 
+;; ---------- 内部：报错定位 ----------
+
+;; 从 GLSL 日志里抠出第一条 "0:行(列):" 的位置；解析不了返回 #f。
+;; 注意：Mesa 的列是 0 起（指向出错 token 的首字符），所以画 ^ 时 +1。
+(define (first-error-position log)
+  (define m (regexp-match #rx"([0-9]+):([0-9]+)[(]([0-9]+)[)]:" log))
+  (and m
+       (list (string->number (list-ref m 2))   ; 行
+             (string->number (list-ref m 3))))) ; 列（0 起）
+
+;; 把美化源码带行号打印，并在出错行下面画一个 ^。
+(define (render-src-with-caret src line col)
+  (define src-lines (string-split src "\n"))
+  (define w (string-length (number->string (length src-lines))))
+  (define (pad s) (string-append (make-string (- w (string-length s)) #\space) s))
+  (string-join
+   (for/list ([i (in-naturals 1)] [l src-lines])
+     (cond
+       [(= i line)
+        (string-append
+         (pad (number->string i)) " | " l "\n"
+         (make-string w #\space) " | " (make-string col #\space) "^")]
+       [else
+        (string-append (pad (number->string i)) " | " l)]))
+   "\n"))
+
 ;; ---------- ① 编译：一段 GLSL 文本 → 一个着色器对象 ----------
 
 ;; type 是任意着色器阶段：gl-vertex-shader / gl-tess-control-shader /
 ;; gl-tess-evaluation-shader / gl-geometry-shader / gl-fragment-shader。
 ;; 编译失败自动抛错，错误消息带 GLSL 报错日志。
 (define (compile-shader type src)
+  ;; 先统一成"美化后的字符串"再编译，报错行号因此对齐美化版：
+  ;;   glsl-program（(glsl ...) 的产物）→ 它的 src 已经是美化串，直接用；
+  ;;   裸字符串 → 现做 glsl-pretty。
+  (define src* (if (glsl-program? src) (glsl-program-src src) (glsl-pretty src)))
   (define shader (gl-create-shader type))
   ;; gl-shader-source 的 C 签名要"字符串数组 + 每段长度数组"：
   ;; 长度数组必须是 s32vector（32 位有符号整数向量）。纯 ffi 细节，藏在这里。
-  (gl-shader-source shader 1 (vector src) (s32vector (string-length src)))
+  (gl-shader-source shader 1 (vector src*) (s32vector (string-length src*)))
   (gl-compile-shader shader)
   (when (zero? (gl-get-shader-iv shader gl-compile-status))
-    (error 'compile-shader "着色器编译失败：\n~a" (shader-info-log shader)))
+    (define log (shader-info-log shader))
+    (define pos (first-error-position log))
+    (error 'compile-shader
+           "着色器编译失败：\n~a\n\n—— 源码定位 ——\n~a"
+           log
+           (if pos
+               (render-src-with-caret src* (car pos) (cadr pos))
+               "（未能从日志解析出错位置）")))
   shader)
 
 ;; ---------- ② 链接：若干着色器对象 → 一个程序对象 ----------

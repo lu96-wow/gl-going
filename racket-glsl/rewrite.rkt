@@ -143,7 +143,7 @@
          [(eq? head '++) (list 'glsl-inc (rw-lvalue (car args)))]
          [(eq? head '--) (list 'glsl-dec (rw-lvalue (car args)))]
          [(eq? head 'raw) (list 'glsl-raw (car args))]  ; ★在 swizzle 之前：raw 由 r/a/w 组成，会被误判成 swizzle
-         [(and (symbol? head) (swizzle-name? head))
+         [(and (symbol? head) (swizzle-name? head) (pair? args))
           (list 'glsl-swizzle (symbol->string head) (rw-expr (car args)))]
          [(and (symbol? head) (string-prefix? (symbol->string head) "."))
           (list 'glsl-field (substring (symbol->string head) 1) (rw-expr (car args)))]
@@ -372,7 +372,14 @@
          (define d (syntax->datum f))
          (when (and (pair? d) (eq? 'struct (car d)))
            (type-names (set-add (type-names) (cadr d)))))
-       ;; 纯数据重写 → 转回 syntax（用宏定义侧上下文）
-       (datum->syntax #'glsl-shader
-                      (cons 'glsl-shader
-                            (map (lambda (f) (rw-top (syntax->datum f))) forms))))]))
+       ;; 一个 form 的源信息：(src-line src-col src-span text)
+       (define (source-info f)
+         (list (syntax-line f) (syntax-column f) (syntax-span f) (syntax->datum f)))
+       ;; 生成 (glsl-mapped (list 片段...) '(源信息...))。
+       ;; 片段 = 要运行的代码（rw-top 结果）；源信息 = 要引用的数据。
+       ;; 代码与数据分列，避免混写 quote 导致的括号/转义错误。
+       (datum->syntax
+        #'glsl-mapped
+        (list 'glsl-mapped
+              (cons 'list (map (lambda (f) (rw-top (syntax->datum f))) forms))
+              (list 'quote (map source-info forms)))))]))
