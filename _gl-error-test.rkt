@@ -17,7 +17,8 @@
         (define (main) void
           (set! FragColor (vec4 1.0 0.35 0.2 1.0)))))
 
-(printf "== 编译器收到的原始字符串 ==\n~s\n\n" vert-src)
+(printf "== 编译器收到的字符串（glsl-program-src）==\n~a\n\n" (glsl-program-src vert-src))
+(printf "== 单行中间串（已不对外暴露，仅供对照）==\n（无——glsl-mapped 内部拼完就直接美化，不再保留）\n\n")
 (printf "== 美化后的样子 ==\n~a\n\n" (glsl-pretty vert-src))
 
 (define-values (frame canvas) (make-window #:title "错误测试"))

@@ -372,14 +372,33 @@
          (define d (syntax->datum f))
          (when (and (pair? d) (eq? 'struct (car d)))
            (type-names (set-add (type-names) (cadr d)))))
-       ;; 一个 form 的源信息：(src-line src-col src-span text)
+       ;; 源文件路径 → 字符串（拿不到则 #f）
+       (define (src-path-string f)
+         (define src (syntax-source f))
+         (cond [(path? src) (path->string src)]
+               [src (format "~a" src)]
+               [else #f]))
+       ;; 一个 form 的源信息：(src-path src-line src-col src-span text)
        (define (source-info f)
-         (list (syntax-line f) (syntax-column f) (syntax-span f) (syntax->datum f)))
-       ;; 生成 (glsl-mapped (list 片段...) '(源信息...))。
-       ;; 片段 = 要运行的代码（rw-top 结果）；源信息 = 要引用的数据。
+         (list (src-path-string f)
+               (syntax-line f) (syntax-column f) (syntax-span f) (syntax->datum f)))
+       ;; 遍历 syntax 收集每个标识符的 (名字 路径 行 列)，报错时据此直接指到标识符
+       (define (collect-identifiers stx)
+         (syntax-case stx ()
+           [(a . d) (append (collect-identifiers #'a) (collect-identifiers #'d))]
+           [id (identifier? #'id)
+               (list (list (symbol->string (syntax->datum #'id))
+                           (src-path-string #'id)
+                           (syntax-line #'id)
+                           (syntax-column #'id)))]
+           [_ '()]))
+       (define tokens (apply append (map collect-identifiers forms)))
+       ;; 生成 (glsl-mapped (list 片段...) '(源信息...) '(标识符表...))。
+       ;; 片段 = 要运行的代码（rw-top 结果）；源信息/标识符表 = 要引用的数据。
        ;; 代码与数据分列，避免混写 quote 导致的括号/转义错误。
        (datum->syntax
         #'glsl-mapped
         (list 'glsl-mapped
               (cons 'list (map (lambda (f) (rw-top (syntax->datum f))) forms))
-              (list 'quote (map source-info forms)))))]))
+              (list 'quote (map source-info forms))
+              (list 'quote tokens))))]))

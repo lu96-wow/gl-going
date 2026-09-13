@@ -10,13 +10,14 @@
 ;;   → 启用 use-program → 查 uniform uniform-location → 删除 delete-*
 ;;
 ;; 约定：
-;;   - 编译 / 链接失败自动抛 Racket 异常，消息里带 GLSL / 链接报错日志。
+;;   - 编译失败自动抛异常，消息分四段（OpenGL 行列/美化、s表达式 行列/美化，见 gl-error.rkt）。
+;;   - 链接失败抛异常，带链接日志。
 ;;   - 每段管线可自定义：任何 GL 着色器阶段类型都可作为编译 type。
 ;;   - 本模块不重新导出 OpenGL 名字（gl-vertex-shader 等由调用方从
 ;;     opengl-rename.rkt 拿），内部统一用 kebab-case 的 gl-* 名字。
 ;; ============================================================
 
-(require racket/string "core.rkt" "opengl-rename.rkt" ffi/vector)
+(require "core.rkt" "opengl-rename.rkt" "gl-error.rkt" ffi/vector)
 
 (provide compile-shader link-program build-program build-program/list
          use-program uniform-location delete-shader delete-program)
@@ -33,31 +34,7 @@
   (define-values (actual log) (gl-get-program-info-log prog len))
   (bytes->string/utf-8 log #\? 0 actual))
 
-;; ---------- 内部：报错定位 ----------
-
-;; 从 GLSL 日志里抠出第一条 "0:行(列):" 的位置；解析不了返回 #f。
-;; 注意：Mesa 的列是 0 起（指向出错 token 的首字符），所以画 ^ 时 +1。
-(define (first-error-position log)
-  (define m (regexp-match #rx"([0-9]+):([0-9]+)[(]([0-9]+)[)]:" log))
-  (and m
-       (list (string->number (list-ref m 2))   ; 行
-             (string->number (list-ref m 3))))) ; 列（0 起）
-
-;; 把美化源码带行号打印，并在出错行下面画一个 ^。
-(define (render-src-with-caret src line col)
-  (define src-lines (string-split src "\n"))
-  (define w (string-length (number->string (length src-lines))))
-  (define (pad s) (string-append (make-string (- w (string-length s)) #\space) s))
-  (string-join
-   (for/list ([i (in-naturals 1)] [l src-lines])
-     (cond
-       [(= i line)
-        (string-append
-         (pad (number->string i)) " | " l "\n"
-         (make-string w #\space) " | " (make-string col #\space) "^")]
-       [else
-        (string-append (pad (number->string i)) " | " l)]))
-   "\n"))
+;; 报错定位（解析 / 定位 / 渲染）在 gl-error.rkt，本文件只做第 ④ 阶段：抛出。
 
 ;; ---------- ① 编译：一段 GLSL 文本 → 一个着色器对象 ----------
 
@@ -76,13 +53,13 @@
   (gl-compile-shader shader)
   (when (zero? (gl-get-shader-iv shader gl-compile-status))
     (define log (shader-info-log shader))
-    (define pos (first-error-position log))
+    ;; 源映射上下文：glsl-program 才有映射；裸字符串只有美化源码（无 form 提示）
+    (define ctx (if (glsl-program? src) src src*))
+    (define located (map (lambda (e) (locate-gl-error ctx e))
+                         (parse-gl-error-log log)))
     (error 'compile-shader
-           "着色器编译失败：\n~a\n\n—— 源码定位 ——\n~a"
-           log
-           (if pos
-               (render-src-with-caret src* (car pos) (cadr pos))
-               "（未能从日志解析出错位置）")))
+           "着色器编译失败：\n\n~a"
+           (render-error log ctx located)))
   shader)
 
 ;; ---------- ② 链接：若干着色器对象 → 一个程序对象 ----------

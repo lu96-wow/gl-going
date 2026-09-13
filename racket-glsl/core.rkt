@@ -25,6 +25,7 @@
  glsl-src glsl-mapped glsl-program-lookup
  (struct-out glsl-program)
  (struct-out glsl-form)
+ (struct-out glsl-token)
  ;; 声明
  glsl-decl glsl-in glsl-out glsl-uniform glsl-const glsl-layout glsl-layout-qual
  ;; 表达式
@@ -73,12 +74,15 @@
 
 ;; ---------- (glsl ...) 的产物：带源映射的 GLSL 程序 ----------
 
-;; glsl-program：src = 美化后的 GLSL（可直接编译）；forms = 每个顶层 form 的源映射
-(struct glsl-program (src forms) #:transparent)
+;; glsl-program：src = 美化后的 GLSL（可直接编译）；forms = 每个顶层 form 的源映射；
+;;               tokens = 每个标识符的精确源位置（报错直接指到标识符用）
+(struct glsl-program (src forms tokens) #:transparent)
+;; glsl-token：一个标识符名 + 它的源文件位置
+(struct glsl-token (name src-path src-line src-col) #:transparent)
 ;; glsl-form：一个顶层 form 的源映射
-;;   src-line/src-col/src-span = 它在 .rkt 源文件里的位置（来自 syntax）
+;;   src-path = .rkt 源文件路径（拿不到则 #f）；src-line/src-col/src-span = 源文件里的位置
 ;;   text = 该 form 的原始 s 表达式；start-line/end-line = 生成 GLSL 落在哪几行（闭区间）
-(struct glsl-form (src-line src-col src-span text start-line end-line) #:transparent)
+(struct glsl-form (src-path src-line src-col src-span text start-line end-line) #:transparent)
 
 ;; 取出 GLSL 源文本：glsl-program → 它的 src；字符串 → 原样
 (define (glsl-src x)
@@ -198,19 +202,21 @@
           (define end (max start (- (+ start len) 1)))  ; len>=1 时 = start+len-1；空串退化为 start
           (loop (cdr xs) (+ start len 1) (cons (cons start end) acc))))))
 
-;; 把 (parts source-infos) 拼成 glsl-program：
+;; 把 (parts source-infos tokens) 拼成 glsl-program：
 ;;   parts = 各顶层 form 生成的 GLSL 字符串（已求值，顺序对应）
-;;   source-infos = 各 form 的 (src-line src-col src-span text)
-(define (glsl-mapped parts source-infos)
+;;   source-infos = 各 form 的 (src-path src-line src-col src-span text)
+;;   tokens = 各标识符的 (name src-path src-line src-col)
+(define (glsl-mapped parts source-infos tokens)
   (define spans (part-spans parts))
   (define marks (apply append (map (lambda (sp) (list (car sp) (cdr sp))) spans)))
   (define-values (pretty lines) (glsl-pretty-line-map (string-join parts " ") marks))
   (define forms
     (for/list ([info source-infos] [i (in-naturals)])
-      (glsl-form (list-ref info 0) (list-ref info 1) (list-ref info 2) (list-ref info 3)
+      (glsl-form (list-ref info 0) (list-ref info 1) (list-ref info 2) (list-ref info 3) (list-ref info 4)
                  (list-ref lines (* 2 i))
                  (list-ref lines (+ (* 2 i) 1)))))
-  (glsl-program pretty forms))
+  ;; tokens 进来是 (名字 路径 行 列) 的裸列表，转成 glsl-token 结构
+  (glsl-program pretty forms (map (lambda (t) (apply glsl-token t)) tokens)))
 
 ;; 查询：美化 GLSL 第 line 行落在哪个顶层 form；没有则 #f
 (define (glsl-program-lookup prog line)
