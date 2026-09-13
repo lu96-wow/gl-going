@@ -15,8 +15,14 @@
 (require "../racket-glsl/rename-vector.rkt")  ; vec / vec2 / vec->f32vector / u32vector-ref
 
 ;; 顶点数据：3 个顶点，每个 = 一个 vec2 位置。
-;;   vec2 x y —— 两个 float 组成的向量（对应 shader 里的 vec2 类型）
-;;   vec      —— 把若干同宽度的 vec2 打包成一块连续缓冲
+;; ★这两个构造器（racket-glsl/rename-vector 提供）从里往外读，别再混：
+;;   vec2 x y —— 一个"2 维向量"（f32vector，两个 float）。名字和 shader 里的
+;;              vec2 类型一致：位置是 2 个数，所以两边都叫 vec2。
+;;   vec      —— 把若干个**同宽度**的 vec2 打包成一块连续缓冲（这里 3 个顶点
+;;              → 6 个连续 float），正是 VBO 要的那条字节流。
+;; 所以 (vec (vec2 -0.5 -0.5) (vec2 0.5 -0.5) (vec2 0.0 0.5))
+;;   = "3 个顶点，拼成一块连续的 6 个 float"。
+;;   （后面课的 vec3/vec4 同理，只换分量数；本构造器从本课起不再重复解释。）
 (define verts
   (vec (vec2 -0.5 -0.5)   ; 左下
        (vec2  0.5 -0.5)   ; 右下
@@ -90,7 +96,10 @@
       ;;
       ;; gl-vertex-attrib-pointer(0, ...) = "0 号频道的数据长这样"，参数逐一看：
       ;;   0        —— 频道号（对应 shader 的 location 0，两边的胶水）
-      ;;   2        —— 每个属性 2 个分量（x、y）
+      ;;   2        —— 每个属性 2 个分量（x、y）。★必须和 shader 里 (in vec2 aPos)
+      ;;               的维数一致：in vec2 → 这里 2；换 3D 的 in vec3 → 这里 3，
+      ;;               步长也跟着变（3 个 float = 12 字节）。顶点不是固定 vec2，
+      ;;               数据几维就填几。
       ;;   gl-float —— 每个分量的类型是 float（GL 常量）
       ;;   #f       —— 不归一化（float 数据不需要；整数数据要归一化到 0~1 才用 #t）
       ;;   8        —— 步长：切完这一片，要跳过 8 字节才到下一个顶点

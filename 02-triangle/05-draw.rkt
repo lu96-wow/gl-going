@@ -42,7 +42,11 @@
   (gl-clear gl-color-buffer-bit)
   (use-program prog)          ; 用哪个程序
   (gl-bind-vertex-array vao)     ; 绑上 VAO（拿到"数据说明书"）
-  ;; gl-triangles = 每 3 个顶点一组三角形；从第 0 个顶点起，画 3 个
+  ;; gl-draw-arrays 的第一个参数是"图元类型"：告诉 GPU 这些顶点按什么拼。
+  ;;   gl-triangles = 每 3 个顶点一个三角形（还有 points 点 / lines 线等）。
+  ;;   ★"填面积"只能靠三角形：点无线宽、线无厚度。为什么三角形是"面积的最小
+  ;;     原子"、四边形怎么用两个三角形拼，05 课展开。
+  ;;   后两个参数：从第 0 个顶点起，画 3 个（= 一个三角形）。
   (gl-draw-arrays gl-triangles 0 3))
 
 (define-values (frame canvas)

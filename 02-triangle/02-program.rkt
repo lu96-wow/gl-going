@@ -12,8 +12,12 @@
 ;; 为什么要两步？两段各自独立编译，哪段错了报哪段；链接再检查两段之间的
 ;; 接口（顶点输出 ↔ 片元输入）是否对得上。
 ;;
-;; 这两步的 gl-* 细节（gl-create-shader、gl-shader-source、状态检查、日志…）
-;; 已收进 racket-glsl/tool.rkt，本步直接调用 build-program，不裸写。
+;; ★为什么"编译/链接之后要查状态"（OpenGL 异步模型的第一次亮相）：
+;;   gl-* 命令只是"放进命令流就返回"，并不等于 GPU 已经做完。所以编译/链接
+;;   返回 ≠ 成功，必须再查状态/日志才知道结果；不查，写错一行 GLSL 只会黑屏。
+;;   这两步的 gl-* 细节（gl-create-shader、gl-shader-source、状态检查、日志…）
+;;   已收进 racket-glsl/tool.rkt：build-program 帮你 编译→查状态→链接→查状态，
+;;   失败自动抛错带日志。本步直接调用，不裸写。
 
 (require "../01-window/04-gui-tool.rkt")   ; 01 课的窗口工具（编译只需上下文，还不需要视口）
 (require "../racket-glsl/rewrite.rkt")  ; (glsl ...) 宏
