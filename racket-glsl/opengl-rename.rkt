@@ -44,6 +44,8 @@
  gl-delete-program
  gl-delete-shader
  gl-draw-arrays
+ gl-draw-elements
+ gl-enable
  gl-enable-vertex-attrib-array
  gl-gen-buffers
  gl-gen-vertex-arrays
@@ -55,6 +57,7 @@
  gl-link-program
  gl-shader-source
  gl-uniform-1f
+ gl-uniform-3f
  gl-uniform-1d
  gl-uniform-2d
  gl-uniform-3d
@@ -62,6 +65,7 @@
  gl-uniform-matrix-2dv
  gl-uniform-matrix-3dv
  gl-uniform-matrix-4dv
+ gl-uniform-matrix-4fv
  gl-use-program
  gl-vertex-attrib-pointer
  gl-vertex-attrib-l-pointer
@@ -74,18 +78,29 @@
  gl-array-buffer
  gl-color-buffer-bit
  gl-compile-status
+ gl-depth-buffer-bit
+ gl-depth-test
  gl-double
  gl-dynamic-draw
+ gl-element-array-buffer
  gl-float
  gl-fragment-shader
  gl-geometry-shader
  gl-info-log-length
+ gl-line-loop
+ gl-line-strip
+ gl-lines
  gl-link-status
+ gl-points
  gl-static-draw
  gl-stream-draw
  gl-tess-control-shader
  gl-tess-evaluation-shader
+ gl-triangle-fan
+ gl-triangle-strip
  gl-triangles
+ gl-unsigned-int
+ gl-unsigned-short
  gl-vertex-shader
  ;; ---------- 辅助函数（opengl 包本就 kebab-case，直接转出） ----------
  gl-vector-sizeof)
@@ -104,6 +119,8 @@
 (define gl-delete-program           glDeleteProgram)
 (define gl-delete-shader            glDeleteShader)
 (define gl-draw-arrays              glDrawArrays)
+(define gl-draw-elements            glDrawElements)
+(define gl-enable                   glEnable)
 (define gl-enable-vertex-attrib-array glEnableVertexAttribArray)
 (define gl-gen-buffers              glGenBuffers)
 (define gl-gen-vertex-arrays        glGenVertexArrays)
@@ -115,6 +132,7 @@
 (define gl-link-program             glLinkProgram)
 (define gl-shader-source            glShaderSource)
 (define gl-uniform-1f               glUniform1f)
+(define gl-uniform-3f               glUniform3f)
 (define gl-uniform-1d               glUniform1d)
 (define gl-uniform-2d               glUniform2d)
 (define gl-uniform-3d               glUniform3d)
@@ -122,6 +140,7 @@
 (define gl-uniform-matrix-2dv       glUniformMatrix2dv)
 (define gl-uniform-matrix-3dv       glUniformMatrix3dv)
 (define gl-uniform-matrix-4dv       glUniformMatrix4dv)
+(define gl-uniform-matrix-4fv       glUniformMatrix4fv)
 (define gl-use-program              glUseProgram)
 (define gl-vertex-attrib-pointer    glVertexAttribPointer)
 (define gl-vertex-attrib-l-pointer  glVertexAttribLPointer)
@@ -136,18 +155,29 @@
 (define gl-array-buffer            GL_ARRAY_BUFFER)
 (define gl-color-buffer-bit        GL_COLOR_BUFFER_BIT)
 (define gl-compile-status          GL_COMPILE_STATUS)
+(define gl-depth-buffer-bit         GL_DEPTH_BUFFER_BIT)
+(define gl-depth-test               GL_DEPTH_TEST)
 (define gl-double                  GL_DOUBLE)
 (define gl-dynamic-draw            GL_DYNAMIC_DRAW)
+(define gl-element-array-buffer    GL_ELEMENT_ARRAY_BUFFER)
 (define gl-float                   GL_FLOAT)
 (define gl-fragment-shader         GL_FRAGMENT_SHADER)
 (define gl-geometry-shader         GL_GEOMETRY_SHADER)
 (define gl-info-log-length         GL_INFO_LOG_LENGTH)
+(define gl-line-loop               GL_LINE_LOOP)
+(define gl-line-strip              GL_LINE_STRIP)
+(define gl-lines                   GL_LINES)
 (define gl-link-status             GL_LINK_STATUS)
+(define gl-points                  GL_POINTS)
 (define gl-static-draw             GL_STATIC_DRAW)
 (define gl-stream-draw             GL_STREAM_DRAW)
 (define gl-tess-control-shader     GL_TESS_CONTROL_SHADER)
 (define gl-tess-evaluation-shader  GL_TESS_EVALUATION_SHADER)
+(define gl-triangle-fan            GL_TRIANGLE_FAN)
+(define gl-triangle-strip          GL_TRIANGLE_STRIP)
 (define gl-triangles               GL_TRIANGLES)
+(define gl-unsigned-int            GL_UNSIGNED_INT)
+(define gl-unsigned-short          GL_UNSIGNED_SHORT)
 (define gl-vertex-shader           GL_VERTEX_SHADER)
 
 ;; gl-vector-sizeof（见 provide 列表"辅助函数"段）是 opengl 包自带的 Racket 工具

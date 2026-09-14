@@ -8,6 +8,6 @@ API/GLSL:
 - (define (wave (float x) (float phase)) float ...) 自写函数; 参数 (类型 名), 返回类型在参数表后, 体尾表达式自动 return
 - 三元 if              表达式版分支(挑一个值), 05 课已学, 和 when/unless/cond 互补
 - uniform uTime + gl-uniform-1f + uniform-location  复习 04 课: 每帧传时间
-- timer% + refresh     复习 04 课: 让帧持续发生
+- start-animation      复习 04 课 05 步: 封装 timer+refresh, 每帧重画
 
 注意: for 边界要写死; if 是表达式, 语句位置的分支用 when/unless/cond.

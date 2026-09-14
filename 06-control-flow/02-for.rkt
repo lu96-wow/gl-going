@@ -27,7 +27,7 @@
 ;;   你看到的是"循环"在数学上最直观的用法：同样的公式，i 每次不同。
 ;; =========================================================
 
-(require "../02-triangle/04-gui-tool.rkt")   ; make-window（带视口）
+(require "../04-animate/05-gui-tool.rkt")  ; make-window + start-animation（04 课收的工具）
 (require "../racket-glsl/rewrite.rkt")        ; (glsl ...) 宏 + glsl-program-src
 (require "../racket-glsl/rename-vector.rkt")  ; vec / vec4 / glsl-stride-bytes
 (require "../racket-glsl/tool.rkt")           ; build-program / use-program / uniform-location
@@ -106,7 +106,6 @@
       (gl-bind-vertex-array 0)
       v)))
 
-(define ticker
-  (new timer% (interval 16) (notify-callback (lambda () (send canvas refresh)))))
+(define ticker (start-animation canvas 16))
 
 (send frame show #t)

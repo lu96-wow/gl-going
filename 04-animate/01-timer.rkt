@@ -18,6 +18,8 @@
 ;;
 ;;   refresh = "给系统排一个重画事件"，系统随后调 on-paint 跑我们的 draw。
 ;;   interval 16 毫秒 ≈ 每秒 60 帧（1000 / 60 ≈ 16.7）。
+;; ★本步裸写 timer 是为了看清帧循环；05 步会把它收进 gui-tool 的 start-animation，
+;;   之后各课不再手写。
 
 (require "../02-triangle/04-gui-tool.rkt")  ; make-window（带视口）
 

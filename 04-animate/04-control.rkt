@@ -10,6 +10,7 @@
 ;;
 ;; 键盘空格切换暂停——所以本步自建窗口（要加 on-char 键盘钩子），
 ;; 顺便认识键盘输入（后面相机课还会用）。
+;; ★为了加一个键盘钩子却要重抄整个窗口，太啰嗦；05 步把 on-char 收进 make-window。
 
 (require racket/gui "../racket-glsl/opengl-rename.rkt")  ; 窗口、画布、timer% + gl-* 函数与常量
 (require "../racket-glsl/rewrite.rkt")
