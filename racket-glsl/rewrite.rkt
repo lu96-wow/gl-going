@@ -224,6 +224,7 @@
          [(eq? head 'switch) (rw-switch args)]
          [(eq? head 'return)
           (if (null? args) '(glsl-return) (list 'glsl-return (rw-expr (car args))))]
+         [(rw-directive s) => (lambda (d) d)]  ; ★ 预处理指令（ifdef/ifndef/else/endif/...）
          [(declaration? s)
           (rw-decl s)]
          [else (list 'glsl-stmt (rw-expr s))])]
@@ -317,11 +318,16 @@
   (define stmt-keywords
     '(when unless cond for while do-while break continue return discard begin))
 
-  ;; 是否为"表达式形态"（非控制流/声明）
+  ;; 语句位置的预处理指令头（不含 if：(if ...) 在表达式位置是三元，只在顶层才是 #if）
+  (define directive-keywords
+    '(define-macro undef ifdef ifndef elif else endif error pragma extension))
+
+  ;; 是否为"表达式形态"（非控制流/声明/预处理指令）
   (define (expr-form? f)
     (and (pair? f)
          (let ([h (car f)])
            (not (or (memq h stmt-keywords)
+                    (memq h directive-keywords)
                     (declaration? f))))))
 
   (define (rw-param p)
@@ -353,6 +359,75 @@
   (define (rw-struct args)
     (list* 'glsl-struct-decl (symbol->string (car args)) (map rw-field (cdr args))))
 
+  ;; ---------- 预处理指令 ----------
+  ;; 预处理指令是语法无关的（编译前按行处理），所以顶层 / 语句位置都允许。
+  ;; 但语句位置的 (if ...) 仍保持“三元表达式错误”语义（rw-stmt 里更早的分支拦截），
+  ;; 因此 #if/#elif 只在顶层可用。
+
+  ;; 指令 token：符号→字符串、字符串/数字原样（#if 0 / #if 1 / #if FOO）
+  (define (rw-macro-token x)
+    (cond
+      [(symbol? x) (symbol->string x)]
+      [(string? x) x]
+      [(number? x) x]
+      [else (error 'glsl "bad macro token: ~s" x)]))
+
+  ;; 宏体：字符串 = 原样（任意 token 序列的逃生舱）；
+  ;;       数字/符号/布尔/列表 = 按表面表达式重写（1→"1"、baz→"baz"、(+ a b)→(a + b)）
+  (define (rw-macro-body body)
+    (if (string? body) body (rw-expr body)))
+
+  ;; (define-macro FOO 1)              → #define FOO 1
+  ;; (define-macro FOO baz)            → #define FOO baz
+  ;; (define-macro (ADD a b) (+ a b))  → #define ADD(a, b) (a + b)
+  ;; (define-macro (MAX a b) "a + b")  → #define MAX(a, b) a + b（字符串=原样）
+  (define (rw-macro-define args)
+    (unless (and (= (length args) 2))
+      (error 'glsl "bad define-macro：~s（应为 (define-macro 名 体) 或 (define-macro (名 参数...) 体)）" (cons 'define-macro args)))
+    (define sig (car args))
+    (define body (rw-macro-body (cadr args)))
+    (cond
+      [(symbol? sig)
+       (list 'glsl-macro-define (symbol->string sig) #f body)]
+      [(and (pair? sig) (symbol? (car sig)) (andmap symbol? (cdr sig)))
+       (list 'glsl-macro-define (symbol->string (car sig))
+             (cons 'list (map symbol->string (cdr sig))) body)]
+      [else (error 'glsl "bad define-macro 签名：~s（应为 名 或 (名 参数...)）" sig)]))
+
+  ;; 一个预处理指令 datum → 其 core 调用 datum；不是指令则 #f
+  (define (rw-directive s)
+    (and (pair? s)
+         (let ([head (car s)] [args (cdr s)])
+           (case head
+             [(define-macro) (rw-macro-define args)]
+             [(undef ifdef ifndef)
+              (unless (and (= (length args) 1) (symbol? (car args)))
+                (error 'glsl "bad ~a：~s（应为 (~a 名字)）" head s head))
+              (list (case head [(undef) 'glsl-macro-undef]
+                               [(ifdef) 'glsl-macro-ifdef]
+                               [else 'glsl-macro-ifndef])
+                    (symbol->string (car args)))]
+             [(if elif error)
+              (unless (= (length args) 1)
+                (error 'glsl "bad ~a：~s（应为 (~a 值)）" head s head))
+              (list (case head [(if) 'glsl-macro-if]
+                               [(elif) 'glsl-macro-elif]
+                               [else 'glsl-macro-error])
+                    (rw-macro-token (car args)))]
+             [(else endif)
+              (unless (null? args)
+                (error 'glsl "bad ~a：~s（应为 (~a)）" head s head))
+              (list (if (eq? head 'else) 'glsl-macro-else 'glsl-macro-endif))]
+             [(pragma)
+              (unless (and (= (length args) 1) (string? (car args)))
+                (error 'glsl "bad pragma：~s（应为 (pragma \"...\")）" s))
+              (list 'glsl-macro-pragma (car args))]
+             [(extension)
+              (unless (and (= (length args) 2) (symbol? (car args)) (symbol? (cadr args)))
+                (error 'glsl "bad extension：~s（应为 (extension 名字 行为)）" s))
+              (list 'glsl-macro-extension (symbol->string (car args)) (symbol->string (cadr args)))]
+             [else #f]))))
+
   ;; ---------- 顶层 ----------
   (define (rw-top t)
     (define head (car t))
@@ -366,6 +441,7 @@
       [(eq? head 'define) (rw-fn args)]
       [(eq? head 'struct) (rw-struct args)]
       [(eq? head 'raw) (list 'glsl-raw (car args))]
+      [(rw-directive t) => (lambda (d) d)]  ; ★ 预处理指令（define-macro/ifdef/if/...）
       [(declaration? t)
        (rw-decl t)]
       [else (error 'glsl "bad top-level form: ~s" t)])))

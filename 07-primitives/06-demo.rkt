@@ -28,6 +28,7 @@
         (layout (location 0) in vec2 aPos)
         (layout (location 1) in vec3 aColor)
         (out vec3 vColor)
+        (raw #define a 1)
         (define (main) void
           (set! vColor aColor)
           (set! gl_PointSize 14.0)      ; 只有画点（顶部那排）时生效

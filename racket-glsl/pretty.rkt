@@ -6,6 +6,7 @@
 ;; 纯函数：数据 → 数据，无副作用（不可变状态 + 递归，无 set!/box）。
 ;; 规则：按 ; { } 换行，按 {} 深度缩进 2 格；保留字符串内容与已有 \n。
 ;;   } 之后仅 else / while / ; / , / 接口块实例名 保持同行，否则换行。
+;;   行首 # 是预处理指令（#define/#ifdef/...），整行原样复制、不参与重排。
 ;;
 ;; glsl-pretty-line-map：美化 + 在 marks（升序 raw 下标）处记录"该字符落在第几行"
 ;;   —— 这是源映射的基础：glsl-program.rkt 靠它算出每个顶层 form 的行区间。
@@ -17,7 +18,7 @@
 
 ;; ---------- 美化状态（不可变，靠 struct-copy 推进） ----------
 
-(struct pstate (lines cur brace paren in-str? started?) #:transparent)
+(struct pstate (lines cur brace paren in-str? started? pp?) #:transparent)
 
 (define (pstate-flush st)
   (if (string=? (pstate-cur st) "")
@@ -79,10 +80,18 @@
   (define c (string-ref s i))
   (define cs (string c))
   (cond
+    ;; ★ 预处理指令模式：# 到行尾逐字原样复制，不碰 ; { } ( ) " 与缩进
+    [(pstate-pp? st)
+     (if (char=? c #\newline)
+         (struct-copy pstate (pstate-flush st) [pp? #f])
+         (pstate-append st cs))]
     [(pstate-in-str? st)
      (struct-copy pstate st [cur (string-append (pstate-cur st) cs)] [in-str? (not (char=? c #\"))])]
     [(char=? c #\")
      (struct-copy pstate (pstate-append (pstate-start st) cs) [in-str? #t])]
+    ;; ★ 行首 # → 进入预处理指令模式（先按 brace 深度缩进，再逐字复制整行）
+    [(and (char=? c #\#) (not (pstate-started? st)))
+     (struct-copy pstate (pstate-append (pstate-start st) cs) [pp? #t])]
     [(char=? c #\newline)
      (pstate-flush st)]
     [(char=? c #\()
@@ -122,7 +131,7 @@
               (pstate-advance s n st i)
               (if hit? (cdr marks-left) marks-left)
               (if hit? (cons (add1 (length (pstate-lines st))) recorded) recorded)))))
-  (go 0 (pstate '() "" 0 0 #f #f) marks '()))
+  (go 0 (pstate '() "" 0 0 #f #f #f) marks '()))
 
 ;; 美化（不记录位置）：字符串 → 多行缩进文本
 (define (glsl-pretty s)

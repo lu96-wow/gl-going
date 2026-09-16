@@ -11,6 +11,22 @@
 (check-equal? (glsl-version 330 "core") "#version 330 core\n")
 (check-equal? (glsl-version 300 "es")   "#version 300 es\n")
 
+;; 预处理指令（每个都独占一行、结尾 \n）
+(check-equal? (glsl-macro-define "FOO" #f "1") "#define FOO 1\n")
+(check-equal? (glsl-macro-define "FOO" #f "") "#define FOO\n")
+(check-equal? (glsl-macro-define "MAX" '("a" "b") "((a) > (b) ? (a) : (b))") "#define MAX(a, b) ((a) > (b) ? (a) : (b))\n")
+(check-equal? (glsl-macro-undef "FOO") "#undef FOO\n")
+(check-equal? (glsl-macro-ifdef "FOO") "#ifdef FOO\n")
+(check-equal? (glsl-macro-ifndef "FOO") "#ifndef FOO\n")
+(check-equal? (glsl-macro-if 1) "#if 1\n")
+(check-equal? (glsl-macro-elif "(FOO > 3)") "#elif (FOO > 3)\n")
+(check-equal? (glsl-macro-else) "#else\n")
+(check-equal? (glsl-macro-endif) "#endif\n")
+(check-equal? (glsl-macro-error "unsupported") "#error unsupported\n")
+(check-equal? (glsl-macro-pragma "STDGL invariant(all)") "#pragma STDGL invariant(all)\n")
+(check-equal? (glsl-macro-extension "GL_OES_standard_derivatives" "enable")
+              "#extension GL_OES_standard_derivatives : enable\n")
+
 (check-equal? (glsl-in "vec2" "aPos") "in vec2 aPos;")
 (check-equal? (glsl-out "vec4" "FragColor") "out vec4 FragColor;")
 (check-equal? (glsl-uniform "float" "uTime") "uniform float uTime;")

@@ -234,3 +234,89 @@
   (lambda () (eval '(glsl (version 330 core)
                           (define (main) void
                             (if (> a b) (set! c a) (set! c b)))))))
+
+;; ---------- 预处理指令（原生宏 / 条件编译）----------
+
+;; object-like 宏：数字/符号/布尔体自动转字符串
+(check-src
+ ((version 330 core)
+  (define-macro FOO 1)
+  (define-macro BAR baz)
+  (uniform float uFoo))
+ "#version 330 core\n#define FOO 1\n#define BAR baz\nuniform float uFoo;")
+
+;; function-like 宏：列表体按表面表达式重写（(+ a b) → (a + b)）
+(check-src
+ ((define-macro (ADD a b) (+ a b))
+  (out vec4 c)
+  (define (main) void (set! c (vec4 (raw "ADD(1.0, 2.0)")))))
+ "#define ADD(a, b) (a + b)\nout vec4 c;\nvoid main() {\n  c = vec4(ADD(1.0, 2.0));\n}")
+
+;; 字符串体 = 原样逃生舱（任意 token 序列，不参与重写）
+(check-src
+ ((define-macro (MAX a b) "((a) > (b) ? (a) : (b))")
+  (out vec4 c)
+  (define (main) void (set! c (vec4 (raw "MAX(1.0, 2.0)")))))
+ "#define MAX(a, b) ((a) > (b) ? (a) : (b))\nout vec4 c;\nvoid main() {\n  c = vec4(MAX(1.0, 2.0));\n}")
+
+;; 空宏体（#define FOO 不产生多余空格）
+(check-src
+ ((define-macro FOO ""))
+ "#define FOO")
+
+;; 条件编译：ifdef / else / endif
+(check-src
+ ((version 330 core)
+  (ifdef FOO)
+  (uniform float uFoo)
+  (else)
+  (uniform float uBar)
+  (endif))
+ "#version 330 core\n#ifdef FOO\nuniform float uFoo;\n#else\nuniform float uBar;\n#endif")
+
+;; ifndef / undef
+(check-src
+ ((ifndef BAR)
+  (undef BAZ)
+  (define-macro BAR 2)
+  (endif))
+ "#ifndef BAR\n#undef BAZ\n#define BAR 2\n#endif")
+
+;; if / elif / else（整数常量表达式：0 / 1 / 名字）
+(check-src
+ ((if 1)
+  (define-macro A 1)
+  (elif 0)
+  (define-macro B 2)
+  (else)
+  (define-macro C 3)
+  (endif))
+ "#if 1\n#define A 1\n#elif 0\n#define B 2\n#else\n#define C 3\n#endif")
+
+;; 函数体内嵌指令（按 brace 深度缩进，整行原样）
+(check-src
+ ((version 330 core)
+  (define (main) void
+    (ifdef DEBUG)
+    (raw "foo();")
+    (endif)))
+ "#version 330 core\nvoid main() {\n  #ifdef DEBUG\n  foo();\n  #endif\n}")
+
+;; extension / error / pragma
+(check-src
+ ((extension GL_OES_standard_derivatives enable))
+ "#extension GL_OES_standard_derivatives : enable")
+(check-src
+ ((error "unsupported"))
+ "#error unsupported")
+(check-src
+ ((pragma "STDGL invariant(all)"))
+ "#pragma STDGL invariant(all)")
+
+;; 非法写法 → 清晰报错
+(check-exn exn:fail?
+  (lambda () (eval '(glsl (define-macro (MAX 1) "x")))))        ; 参数必须全是符号
+(check-exn exn:fail?
+  (lambda () (eval '(glsl (ifdef 1)))))                          ; ifdef 后必须跟名字
+(check-exn exn:fail?
+  (lambda () (eval '(glsl (extension GL_FOO)))))                 ; extension 缺行为

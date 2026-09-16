@@ -24,6 +24,10 @@
 (provide
  ;; 拼装
  glsl-shader glsl-version glsl-raw
+ ;; 预处理指令
+ glsl-macro-define glsl-macro-undef
+ glsl-macro-ifdef glsl-macro-ifndef glsl-macro-if glsl-macro-elif glsl-macro-else glsl-macro-endif
+ glsl-macro-error glsl-macro-pragma glsl-macro-extension
  ;; 共享小工具
  ->str ident-char?
  ;; 声明
@@ -82,6 +86,51 @@
       (format "#version ~a\n" (->str n))))
 
 (define (glsl-raw s) (->str s))
+
+;; ---------- 0.5 预处理指令 ----------
+
+;; 预处理指令都必须独占一行，所以每个都带结尾 \n。
+;; 内容不参与 pretty 的 ; { } ( ) 重排——pretty.rkt 对「行首 #」整行原样复制。
+
+;; #define：object-like（params=#f）或 function-like（params=参数名字符串列表）
+(define (glsl-macro-define name params body)
+  (define b (->str body))
+  (define body-part (if (string=? b "") "" (format " ~a" b)))
+  (if params
+      (format "#define ~a(~a)~a\n"
+              (->str name) (string-join (map ->str params) ", ") body-part)
+      (format "#define ~a~a\n" (->str name) body-part)))
+
+(define (glsl-macro-undef name)
+  (format "#undef ~a\n" (->str name)))
+
+(define (glsl-macro-ifdef name)
+  (format "#ifdef ~a\n" (->str name)))
+
+(define (glsl-macro-ifndef name)
+  (format "#ifndef ~a\n" (->str name)))
+
+(define (glsl-macro-if expr)
+  (format "#if ~a\n" (->str expr)))
+
+(define (glsl-macro-elif expr)
+  (format "#elif ~a\n" (->str expr)))
+
+(define (glsl-macro-else)
+  "#else\n")
+
+(define (glsl-macro-endif)
+  "#endif\n")
+
+(define (glsl-macro-error msg)
+  (format "#error ~a\n" (->str msg)))
+
+(define (glsl-macro-pragma body)
+  (format "#pragma ~a\n" (->str body)))
+
+;; #extension 名字 : 行为（行为 = enable / disable / warn / require）
+(define (glsl-macro-extension name behavior)
+  (format "#extension ~a : ~a\n" (->str name) (->str behavior)))
 
 ;; ---------- 1. 声明 ----------
 
