@@ -320,3 +320,62 @@
   (lambda () (eval '(glsl (ifdef 1)))))                          ; ifdef 后必须跟名字
 (check-exn exn:fail?
   (lambda () (eval '(glsl (extension GL_FOO)))))                 ; extension 缺行为
+
+;; ---------- glsl-unquote：在 (glsl ...) 内插入 Racket 代码 / 宏 ----------
+;; 顶层拼接（表达式在“使用侧”求值，这里用 format 造声明）
+(check-glsl "#version 330 core\n uniform float uTime;"
+            ((version 330 core) (glsl-unquote (format "uniform float ~a;" "uTime"))))
+;; 拼接 Racket 函数的返回值
+(define (unq-decls) "uniform vec3 uColor;")
+(check-glsl "#version 330 core\n uniform vec3 uColor;"
+            ((version 330 core) (glsl-unquote (unq-decls))))
+;; 语句位置
+(check-glsl "void main() { int x = 1; return; }"
+            ((define (main) void
+               (glsl-unquote (format "int x = ~a;" 1))
+               (return))))
+;; 表达式位置
+(check-glsl "void main() { x = 1.0; }"
+            ((define (main) void
+               (set! x (glsl-unquote "1.0")))))
+;; 拼接一个子 glsl-program（可组合）
+(define unq-sub (glsl (uniform float uTime) (uniform vec2 uRes)))
+(check-glsl "#version 330 core\n uniform float uTime;\n uniform vec2 uRes;"
+            ((version 330 core) (glsl-unquote unq-sub)))
+;; Racket 宏写在 glsl-unquote 内部（保留使用侧语法 → 照常展开）
+(define-syntax-rule (unq-stmt x) (format "int ~a = 2;" 'x))
+(check-glsl "void main() { int y = 2; }"
+            ((define (main) void (glsl-unquote (unq-stmt y)))))
+;; 返回值必须是字符串 / glsl-program → 运行期清晰报错
+(check-exn exn:fail?
+  (lambda () (glsl (glsl-unquote 123))))
+;; glsl-unquote 不能出现在 (glsl ...) 之外
+(check-exn exn:fail?
+  (lambda () (eval '(glsl-unquote 1))))
+
+;; ---------- 源映射 / 美化：glsl-unquote 不改变“一个顶层 form = 一个片段”契约 ----------
+;; ① 普通程序：每个顶层 form 逐行对得上（美化仍然是最终串的纯函数）
+(define unq-map
+  (glsl (version 330 core)
+        (uniform float uTime)
+        (out vec4 c)
+        (define (main) void (set! c (vec4 1.0)))))
+(check-equal? (glsl-form-text (glsl-program-lookup unq-map 1)) '(version 330 core))
+(check-equal? (glsl-form-text (glsl-program-lookup unq-map 2)) '(uniform float uTime))
+(check-equal? (glsl-form-text (glsl-program-lookup unq-map 4))
+              '(define (main) void (set! c (vec4 1.0))))
+;; ② 多行拼接：这些行全部归到同一个 glsl-unquote form（行区间自动拉长）
+(define unq-multi
+  (glsl (version 330 core)
+        (glsl-unquote "uniform float uTime;\nuniform vec2 uRes;")
+        (out vec4 c)))
+(check-equal? (glsl-form-text (glsl-program-lookup unq-multi 2))
+              '(glsl-unquote "uniform float uTime;\nuniform vec2 uRes;"))
+(check-equal? (glsl-form-text (glsl-program-lookup unq-multi 3))
+              '(glsl-unquote "uniform float uTime;\nuniform vec2 uRes;"))
+;; ③ 空串拼接（重复 mark 的边界情况）不崩、不丢 form
+(check-equal? (glsl-program-src (glsl (version 330 core) (glsl-unquote "") (out vec4 c)))
+              "#version 330 core\nout vec4 c;")
+;; ④ 空串 form（raw ""，早在 glsl-unquote 之前就存在）同样不崩
+(check-equal? (glsl-program-src (glsl (version 330 core) (raw "") (out vec4 c)))
+              "#version 330 core\nout vec4 c;")

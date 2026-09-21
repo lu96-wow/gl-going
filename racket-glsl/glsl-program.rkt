@@ -55,9 +55,17 @@
 ;;   source-infos = 各 form 的 (src-path src-line src-col src-span text)
 ;;   tokens = 各标识符的 (name src-path src-line src-col)
 (define (make-glsl-program parts source-infos tokens)
-  (define spans (part-spans parts))
+  ;; 片段：字面核心是字符串；glsl-unquote 拼接的值可为字符串或 glsl-program（取 src）
+  (define strs
+    (for/list ([p (in-list parts)])
+      (cond
+        [(string? p) p]
+        [(glsl-program? p) (glsl-program-src p)]
+        [else (error 'make-glsl-program
+                     "glsl-unquote 必须返回字符串或 glsl-program，得到：~s" p)])))
+  (define spans (part-spans strs))
   (define marks (apply append (map (lambda (sp) (list (car sp) (cdr sp))) spans)))
-  (define-values (pretty lines) (glsl-pretty-line-map (string-join parts " ") marks))
+  (define-values (pretty lines) (glsl-pretty-line-map (string-join strs " ") marks))
   (define forms
     (for/list ([info source-infos] [i (in-naturals)])
       (glsl-form (list-ref info 0) (list-ref info 1) (list-ref info 2) (list-ref info 3) (list-ref info 4)

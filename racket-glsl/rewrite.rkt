@@ -10,6 +10,11 @@
 ;;
 ;; (glsl ...) 宏只做三步：
 ;;   syntax->datum → rw-top → datum->syntax（用宏定义侧上下文，保证 glsl-* 可解析）
+;;
+;; ★ glsl-unquote：在 (glsl ...) 内原样插入 Racket 代码 / 宏。
+;;   (glsl-unquote e) 会在重写前被“摘下”，原位放一个标记；e 保留“使用侧语法”
+;;   原样求值（须返回字符串或 glsl-program），拼接进最终 GLSL。
+;;   顶层 / 语句 / 表达式位置都支持。
 ;; ============================================================
 
 (require (for-syntax racket/base
@@ -24,12 +29,17 @@
          "pretty.rkt"
          "glsl-program.rkt")
 
-(provide glsl
+(provide glsl glsl-unquote
          (all-from-out "core.rkt")
          (all-from-out "pretty.rkt")
          (all-from-out "glsl-program.rkt"))
 
 (begin-for-syntax
+
+  ;; ---------- glsl-unquote 拼接标记 ----------
+  ;; 表面 (glsl-unquote e) 在重写前被"摘下"，原位放一个 splice-marker：
+  ;; 重写各层只把它当普通原子透传，最后由 tree->syntax 换成使用侧的 Racket 表达式。
+  (struct splice-marker (index) #:transparent)
 
   ;; ---------- 类型名集合 ----------
   (define builtin-types
@@ -123,6 +133,7 @@
   ;; ---------- 表达式 ----------
   (define (rw-expr e)
     (cond
+      [(splice-marker? e) e]            ; ★ glsl-unquote：原样透传，运行期求值
       [(number? e)
        (when (and (exact? e) (rational? e) (not (integer? e)))
          (error 'glsl "GLSL 没有有理数字面量：~s。请写小数（如 0.5）或用 (/ 1.0 2.0)" e))
@@ -197,6 +208,7 @@
 
   (define (rw-stmt s)
     (cond
+      [(splice-marker? s) s]            ; ★ glsl-unquote：整条语句
       [(pair? s)
        (define head (car s))
        (define args (cdr s))
@@ -430,32 +442,61 @@
 
   ;; ---------- 顶层 ----------
   (define (rw-top t)
-    (define head (car t))
-    (define args (cdr t))
     (cond
-      [(eq? head 'version)
-       (define n (car args))
-       (if (null? (cdr args))
-           (list 'glsl-version n)
-           (list 'glsl-version n (symbol->string (cadr args))))]
-      [(eq? head 'define) (rw-fn args)]
-      [(eq? head 'struct) (rw-struct args)]
-      [(eq? head 'raw) (list 'glsl-raw (car args))]
-      [(rw-directive t) => (lambda (d) d)]  ; ★ 预处理指令（define-macro/ifdef/if/...）
-      [(declaration? t)
-       (rw-decl t)]
-      [else (error 'glsl "bad top-level form: ~s" t)])))
+      [(splice-marker? t) t]            ; ★ glsl-unquote：整个顶层 form
+      [else
+       (define head (car t))
+       (define args (cdr t))
+       (cond
+         [(eq? head 'version)
+          (define n (car args))
+          (if (null? (cdr args))
+              (list 'glsl-version n)
+              (list 'glsl-version n (symbol->string (cadr args))))]
+         [(eq? head 'define) (rw-fn args)]
+         [(eq? head 'struct) (rw-struct args)]
+         [(eq? head 'raw) (list 'glsl-raw (car args))]
+         [(rw-directive t) => (lambda (d) d)]  ; ★ 预处理指令（define-macro/ifdef/if/...）
+         [(declaration? t)
+          (rw-decl t)]
+         [else (error 'glsl "bad top-level form: ~s" t)])])))
+
+;; glsl-unquote：在 (glsl ...) 内被"摘下"（按符号名提取，见 glsl 宏的 walk）。
+;; 提供一个同名宏，让它在 (glsl ...) 之外出现时给出清晰报错。
+(define-syntax (glsl-unquote stx)
+  (raise-syntax-error 'glsl-unquote "glsl-unquote 只能直接写在 (glsl ...) 内" stx))
 
 ;; ---------- 入口宏 ----------
 (define-syntax (glsl stx)
   (syntax-case stx ()
     [(_ form ...)
      (let ()
-       ;; 先收集本块 struct 名，扩充类型集合
        (define forms (syntax->list #'(form ...)))
-       (type-names builtin-types)
-       (for ([f forms])
+
+       ;; ★ 摘出 (glsl-unquote e)：原位放 splice-marker，e 保留使用侧语法。
+       ;;   这样重写各层看不到 Racket 表达式，最后由 tree->syntax 换回语法对象。
+       (define splices '())                       ; 逆序累积的拼接表达式（syntax）
+       (define (walk f)
          (define d (syntax->datum f))
+         (cond
+           [(and (pair? d) (eq? (car d) 'glsl-unquote))
+            (define lst (syntax->list f))
+            (unless (and lst (= 2 (length lst)))
+              (error 'glsl "bad glsl-unquote：~s（应为 (glsl-unquote 表达式)）" d))
+            (set! splices (cons (cadr lst) splices))
+            (splice-marker (sub1 (length splices)))]
+           [(pair? d)
+            (define lst (syntax->list f))
+            (if lst
+                (map walk lst)
+                (error 'glsl "glsl-unquote：不支持点对语法 ~s" d))]
+           [else d]))
+       (define datas (map walk forms))            ; 带标记的 datum 树
+       (define splice-vec (list->vector (reverse splices)))
+
+       ;; 先收集本块 struct 名，扩充类型集合
+       (type-names builtin-types)
+       (for ([d datas])
          (when (and (pair? d) (eq? 'struct (car d)))
            (type-names (set-add (type-names) (cadr d)))))
        ;; 源文件路径 → 字符串（拿不到则 #f）
@@ -468,23 +509,35 @@
        (define (source-info f)
          (list (src-path-string f)
                (syntax-line f) (syntax-column f) (syntax-span f) (syntax->datum f)))
-       ;; 遍历 syntax 收集每个标识符的 (名字 路径 行 列)，报错时据此直接指到标识符
-       (define (collect-identifiers stx)
-         (syntax-case stx ()
-           [(a . d) (append (collect-identifiers #'a) (collect-identifiers #'d))]
-           [id (identifier? #'id)
-               (list (list (symbol->string (syntax->datum #'id))
-                           (src-path-string #'id)
-                           (syntax-line #'id)
-                           (syntax-column #'id)))]
-           [_ '()]))
+       ;; 遍历 syntax 收集每个标识符的 (名字 路径 行 列)，报错时据此直接指到标识符。
+       ;; ★ 跳过 glsl-unquote 子树：那里的标识符是 Racket 代码，不属于 GLSL 名字表。
+       (define (collect-identifiers f)
+         (define dat (syntax->datum f))
+         (if (and (pair? dat) (eq? (car dat) 'glsl-unquote))
+             '()
+             (syntax-case f ()
+               [(a . b) (append (collect-identifiers #'a) (collect-identifiers #'b))]
+               [id (identifier? #'id)
+                   (list (list (symbol->string (syntax->datum #'id))
+                               (src-path-string #'id)
+                               (syntax-line #'id)
+                               (syntax-column #'id)))]
+               [_ '()])))
        (define tokens (apply append (map collect-identifiers forms)))
+
+       ;; 带标记的 datum 树 → 语法对象：普通原子用宏定义侧上下文（glsl-* 可解析），
+       ;; splice-marker 换成使用侧语法（Racket 表达式原样求值，须返回字符串/glsl-program）。
+       (define (tree->syntax t)
+         (cond
+           [(splice-marker? t) (vector-ref splice-vec (splice-marker-index t))]
+           [(pair? t) (cons (tree->syntax (car t)) (tree->syntax (cdr t)))]
+           [else (datum->syntax #'make-glsl-program t)]))
+
        ;; 生成 (make-glsl-program (list 片段...) '(源信息...) '(标识符表...))。
-       ;; 片段 = 要运行的代码（rw-top 结果）；源信息/标识符表 = 要引用的数据。
-       ;; 代码与数据分列，避免混写 quote 导致的括号/转义错误。
-       (datum->syntax
-        #'make-glsl-program
-        (list 'make-glsl-program
-              (cons 'list (map (lambda (f) (rw-top (syntax->datum f))) forms))
-              (list 'quote (map source-info forms))
-              (list 'quote tokens))))]))
+       ;; 片段 = 要运行的代码（rw-top 结果 / glsl-unquote 表达式）；
+       ;; 源信息/标识符表 = 要引用的数据。代码与数据分列，避免混写 quote 导致的括号/转义错误。
+       (with-syntax ([(part ...) (map (lambda (d) (tree->syntax (rw-top d))) datas)])
+         #`(make-glsl-program
+            (list part ...)
+            '#,(map source-info forms)
+            '#,tokens)))]))
