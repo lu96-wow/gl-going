@@ -74,13 +74,13 @@
 (define (render-gl-linecol log)
   (string-append "OpenGL log:\n" log))
 
-;; ② OpenGL 美化报错：美化 GLSL 源码 + 标出报错行
+;; ② OpenGL 美化报错：美化 GLSL 源码 + 标出报错行（源为空则输出空）
 (define (render-gl-pretty src located)
   (define e (first-located located located-error-line))
-  (if (not e)
-      ""
-      (string-append "OpenGL source:\n"
-                     (render-numbered-lines (glsl-src src) (located-error-line e)))))
+  (define body (and e (render-numbered-lines (glsl-src src) (located-error-line e))))
+  (if (and body (not (string=? body "")))
+      (string-append "OpenGL source:\n" body)
+      ""))
 
 ;; ③ s表达式 源文件：读 .rkt 源文件，标出该 form 所在行；
 ;;    读不到文件（如 REPL / 无源路径）才回退到格式化 datum。
