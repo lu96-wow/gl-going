@@ -505,25 +505,9 @@
          (cond [(path? src) (path->string src)]
                [src (format "~a" src)]
                [else #f]))
-       ;; 一个 form 的源信息：(src-path src-line src-col src-span text)
+       ;; 一个 form 的源信息：(src-path src-line text) —— 源映射只到行
        (define (source-info f)
-         (list (src-path-string f)
-               (syntax-line f) (syntax-column f) (syntax-span f) (syntax->datum f)))
-       ;; 遍历 syntax 收集每个标识符的 (名字 路径 行 列)，报错时据此直接指到标识符。
-       ;; ★ 跳过 glsl-unquote 子树：那里的标识符是 Racket 代码，不属于 GLSL 名字表。
-       (define (collect-identifiers f)
-         (define dat (syntax->datum f))
-         (if (and (pair? dat) (eq? (car dat) 'glsl-unquote))
-             '()
-             (syntax-case f ()
-               [(a . b) (append (collect-identifiers #'a) (collect-identifiers #'b))]
-               [id (identifier? #'id)
-                   (list (list (symbol->string (syntax->datum #'id))
-                               (src-path-string #'id)
-                               (syntax-line #'id)
-                               (syntax-column #'id)))]
-               [_ '()])))
-       (define tokens (apply append (map collect-identifiers forms)))
+         (list (src-path-string f) (syntax-line f) (syntax->datum f)))
 
        ;; 带标记的 datum 树 → 语法对象：普通原子用宏定义侧上下文（glsl-* 可解析），
        ;; splice-marker 换成使用侧语法（Racket 表达式原样求值，须返回字符串/glsl-program）。
@@ -533,11 +517,10 @@
            [(pair? t) (cons (tree->syntax (car t)) (tree->syntax (cdr t)))]
            [else (datum->syntax #'make-glsl-program t)]))
 
-       ;; 生成 (make-glsl-program (list 片段...) '(源信息...) '(标识符表...))。
-       ;; 片段 = 要运行的代码（rw-top 结果 / glsl-unquote 表达式）；
-       ;; 源信息/标识符表 = 要引用的数据。代码与数据分列，避免混写 quote 导致的括号/转义错误。
+       ;; 生成 (make-glsl-program (list 片段...) '(源信息...))。
+       ;; 片段 = 要运行的代码（rw-top 结果 / glsl-unquote 表达式）；源信息 = 要引用的数据。
+       ;; 代码与数据分列，避免混写 quote 导致的括号/转义错误。
        (with-syntax ([(part ...) (map (lambda (d) (tree->syntax (rw-top d))) datas)])
          #`(make-glsl-program
             (list part ...)
-            '#,(map source-info forms)
-            '#,tokens)))]))
+            '#,(map source-info forms))))]))
