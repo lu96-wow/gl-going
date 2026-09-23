@@ -16,7 +16,7 @@
 ;;   不做列 / 标识符级定位（gl-error.rkt 只用行）。
 ;; ============================================================
 
-(require racket/string "pretty.rkt")   ; string-join / string-split / glsl-pretty
+(require racket/string "pretty.rkt" "glsl-interface.rkt")   ; string-join / string-split / glsl-pretty
 
 (provide glsl-src make-glsl-program glsl-program-lookup
          (struct-out glsl-program)
@@ -24,8 +24,8 @@
 
 ;; ---------- 数据 ----------
 
-;; glsl-program：src = 美化后的 GLSL；forms = 顶层 form 源映射
-(struct glsl-program (src forms) #:transparent)
+;; glsl-program：src = 美化后的 GLSL；forms = 顶层 form 源映射；interface = 类型化接口反射
+(struct glsl-program (src forms interface) #:transparent)
 
 ;; glsl-form：一个顶层 form 的源映射
 ;;   src-path = .rkt 源文件路径（拿不到则 #f）；src-line = 源文件里的起始行
@@ -42,15 +42,16 @@
 (define (pretty-line-count s)
   (if (string=? s "") 0 (length (string-split s "\n"))))
 
-;; 把 (parts source-infos) 拼成 glsl-program：
+;; 把 (parts source-infos interface-datum) 拼成 glsl-program：
 ;;   parts = 各顶层 form 生成的 GLSL（字符串或 glsl-program，已求值，顺序对应）
 ;;   source-infos = 各 form 的 (src-path src-line text)
+;;   interface-datum = 接口反射的 datum（宏展开期算好，见 glsl-interface.rkt）
 ;;
 ;; ★ 行映射：顶层 form 都"平衡、且以 ; } \n 结尾"，在 form 边界处美化状态归零，
 ;;   所以「整体美化」==「各 form 单独美化后按 \n 拼」（见 pretty.rkt 的 pstate）。
 ;;   于是每个 form 占几行 = 它自己美化后的行数，行区间用累计行数直接算——
 ;;   不需要在原始串上打 marks、也不需要偏移量算术。空片段 = 0 行（映射不到任何行）。
-(define (make-glsl-program parts source-infos)
+(define (make-glsl-program parts source-infos interface-datum)
   ;; 片段归一：字符串原样；glsl-program 取 src；其它 → 报错
   (define strs
     (for/list ([p (in-list parts)])
@@ -72,7 +73,7 @@
   (define forms
     (for/list ([info source-infos] [r (in-list ranges)])
       (glsl-form (list-ref info 0) (list-ref info 1) (list-ref info 2) (car r) (cdr r))))
-  (glsl-program pretty forms))
+  (glsl-program pretty forms (datum->glsl-interface interface-datum)))
 
 ;; ---------- 查询 ----------
 

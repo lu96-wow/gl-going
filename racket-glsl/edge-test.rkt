@@ -158,7 +158,8 @@
 
 ;; 无源路径（手工构造 src-path/src-line = #f）→ 回退到格式化 datum
 (define pe2 (make-glsl-program (list (glsl-version 330 "core"))
-                               (list (list #f #f '(version 330 core)))))
+                               (list (list #f #f '(version 330 core)))
+                               '()))
 (define le2 (locate-gl-error pe2 (car (parse-gl-error-log "0:1(0): error: y\n"))))
 (check-equal? (render-sexpr-pretty (list le2))
               "s-expr source:\n(version 330 core)")
