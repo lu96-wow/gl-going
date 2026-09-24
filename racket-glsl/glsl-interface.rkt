@@ -2,19 +2,27 @@
 ;; ============================================================
 ;; glsl-interface.rkt —— GLSL 类型模型 + 一个 shader 的接口反射
 ;;
+;; ★★★ 暂定（tentative）★★★
+;;   本模块是"获取类型信息"的实现，命名与数据结构**尚未定稿**，仍可能调整：
+;;     - 字段名 / 枚举取值（kind、qualifier、layout 形状）可能变；
+;;     - 反射范围（收哪些声明、是否含 struct 定义）可能变；
+;;     - 可能拆分/合并模块。
+;;   在定稿前，请把它当作「先能用」的版本，不要在上面堆过多、过脆的依赖。
+;;
 ;; 本模块只做两件事，且不做组合（不合并多个 shader、不生成 setter、不碰 GL）：
 ;;   ① 用一种结构表达**所有** GLSL 类型：
 ;;        scalar / vector / matrix / sampler / image / array / struct / block / void
 ;;   ② 把 shader 声明出来的东西（uniform/in/out/const/buffer/shared 及其 struct/block）
 ;;      表达成统一的「名字 + 类型 + 限定符 + layout」。
 ;;
-;; 统一的两把数据结构：
+;; 统一的两把数据结构（暂定）：
 ;;   glsl-type  —— 类型（kind 区分；array 用 elem/len，struct/block 用 fields）
 ;;   glsl-var   —— 一条声明（接口变量 与 struct/block 成员**共用**同一结构）
 ;; ============================================================
 
 (require racket/list racket/string racket/match)
 
+;; ★ 暂定 API（见文件头）：下面这些名/形都可能再变
 (provide
  ;; ---- 类型 ----
  glsl-type? glsl-type

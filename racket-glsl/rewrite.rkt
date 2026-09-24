@@ -426,6 +426,7 @@
 
   ;; ---------- 接口反射：声明 → glsl-type / glsl-var ----------
   ;; 只"读"声明，不做组合（不合并多个 shader、不生成 setter）。
+  ;; ★ 暂定：类型模型与反射形状见 glsl-interface.rkt，尚未定稿，可能调整。
 
   ;; struct 定义：名字 → 字段 form 表
   (define (struct-def-of d)
